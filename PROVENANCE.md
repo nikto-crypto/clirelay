@@ -46,3 +46,4 @@ a routine step risks touching forbidden material.)
 | Phase | Date | Differential pass rate | Notes |
 |-------|------|------------------------|-------|
 | (bootstrap) | 2026-10-31 | n/a | repo scaffold, venv on oracle Python 3.15, oracle black-box smoke test passing |
+| 1. types | 2026-10-31 | 321/321 (types micro-diff) | ParamType hierarchy, convert/to_info_dict/get_metavar/repr for every type, convert_type, ranges, Choice (incl. enum & case-insensitive), File/Path, plus foundations (sentinel, ANSI style/strip, exceptions, globals, stream layer, echo/format_filename/get_app_dir) all matched against oracle |
