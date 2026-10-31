@@ -242,11 +242,22 @@ def _resolve_incomplete(
     ctx: Context, args: list[str], incomplete: str
 ) -> tuple[t.Any, str]:
     if incomplete == "=":
-        incomplete = ""
-    elif "=" in incomplete and incomplete[:1] not in ctx._opt_prefixes:
+        return ctx.command, ""
+    if "=" in incomplete and incomplete[:1] in ctx._opt_prefixes:
         name, _, incomplete = incomplete.partition("=")
         for param in ctx.command.get_params(ctx):
             if isinstance(param, Option) and name in param.opts:
+                return param, incomplete
+    # If the previous token is an option that still needs a value, complete it.
+    if args:
+        last = args[-1]
+        for param in ctx.command.get_params(ctx):
+            if (
+                isinstance(param, Option)
+                and not param.is_flag
+                and not param.count
+                and last in [*param.opts, *param.secondary_opts]
+            ):
                 return param, incomplete
     return ctx.command, incomplete
 

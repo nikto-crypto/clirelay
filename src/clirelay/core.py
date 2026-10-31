@@ -1259,9 +1259,11 @@ class Command:
                     CompletionItem(name, help=param.help)
                     for name in [*param.opts, *param.secondary_opts]
                     if name.startswith(incomplete)
-                    and ctx.get_parameter_source(param.name)
-                    is not ParameterSource.COMMANDLINE
                 )
+        else:
+            for param in self.get_params(ctx):
+                if isinstance(param, Argument):
+                    results.extend(param.shell_complete(ctx, incomplete))
         return results
 
 
@@ -1493,6 +1495,22 @@ class Group(Command):
                 with sub_ctx:
                     rv.append(sub_ctx.command.invoke(sub_ctx))
             return _process_result(rv)
+
+    def shell_complete(self, ctx: Context, incomplete: str) -> list[CompletionItem]:
+        from .shell_completion import CompletionItem
+
+        results: list[CompletionItem] = []
+        if not incomplete or incomplete[0].isalnum():
+            for name in self.list_commands(ctx):
+                command = self.get_command(ctx, name)
+                if command is None or command.hidden:
+                    continue
+                if name.startswith(incomplete):
+                    results.append(
+                        CompletionItem(name, help=command.get_short_help_str())
+                    )
+        results.extend(super().shell_complete(ctx, incomplete))
+        return results
 
     def resolve_command(
         self, ctx: Context, args: list[str]
