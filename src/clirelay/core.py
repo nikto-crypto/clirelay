@@ -536,13 +536,17 @@ class Parameter:
                 and source
                 not in (ParameterSource.DEFAULT, ParameterSource.DEFAULT_MAP)
             ):
-                extra = f": {self.deprecated}" if isinstance(self.deprecated, str) else ""
-                import warnings
-
-                warnings.warn(
-                    f"The {self.param_type_name} {self.name!r} is deprecated{extra}.",
-                    category=DeprecationWarning,
-                    stacklevel=2,
+                extra = f" {self.deprecated}" if isinstance(self.deprecated, str) else ""
+                display = (
+                    self.name.upper()
+                    if self.param_type_name == "argument"
+                    else self.name
+                )
+                echo(
+                    f"DeprecationWarning: The {self.param_type_name} "
+                    f"{display!r} is deprecated.{extra}",
+                    err=True,
+                    color=ctx.color,
                 )
             ctx.set_parameter_source(self.name, source)
             try:
@@ -1308,9 +1312,11 @@ class Group(Command):
         self.invoke_without_command = invoke_without_command
         if subcommand_metavar is None:
             if chain:
-                subcommand_metavar = "COMMAND1 [ARGS]... [COMMAND2 [ARGS]...]..."
+                first = "[COMMAND1]" if invoke_without_command else "COMMAND1"
+                subcommand_metavar = f"{first} [ARGS]... [COMMAND2 [ARGS]...]..."
             else:
-                subcommand_metavar = "COMMAND [ARGS]..."
+                first = "[COMMAND]" if invoke_without_command else "COMMAND"
+                subcommand_metavar = f"{first} [ARGS]..."
         self.subcommand_metavar = subcommand_metavar
         self.chain = chain
         self._result_callback = result_callback
@@ -1595,13 +1601,11 @@ def _check_params(params: t.Sequence[Parameter]) -> None:
 
 def _check_deprecated(cmd: Command, ctx: Context) -> None:
     if cmd.deprecated and not ctx.resilient_parsing:
-        import warnings
-
-        extra = f": {cmd.deprecated}" if isinstance(cmd.deprecated, str) else ""
-        warnings.warn(
-            f"The command {cmd.name!r} is deprecated{extra}.",
-            category=DeprecationWarning,
-            stacklevel=2,
+        extra = f" {cmd.deprecated}" if isinstance(cmd.deprecated, str) else ""
+        echo(
+            f"DeprecationWarning: The command {cmd.name!r} is deprecated.{extra}",
+            err=True,
+            color=ctx.color,
         )
 
 
@@ -1622,19 +1626,19 @@ def _make_default_short_help(help: str, max_length: int = 45) -> str:
     total_length = 0
     last_index = len(words) - 1
     result: list[str] = []
-    done = False
+    truncated = False
     for i, word in enumerate(words):
         total_length += len(word) + (1 if i > 0 else 0)
         if total_length > max_length:
-            result.append("...")
-            done = True
-        else:
-            result.append(word)
-            if i != last_index and word.endswith("."):
-                done = True
-        if done:
+            truncated = True
             break
-    return " ".join(result)
+        result.append(word)
+        if i != last_index and word.endswith("."):
+            break
+    rv = " ".join(result)
+    if truncated:
+        rv += "..."
+    return rv
 
 
 def _detect_prog_name() -> str:
