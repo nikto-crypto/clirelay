@@ -220,7 +220,7 @@ def test_deprecated_attributes(mod_name):
     data = _SURFACE["modules"][mod_name]
     dep = data.get("deprecated_attributes", {})
     if not dep:
-        pytest.skip("no deprecated attributes")
+        return  # nothing to check for this module
     mod = _clirelay_module(mod_name)
     errors: list[str] = []
 
