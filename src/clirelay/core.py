@@ -647,8 +647,15 @@ class Option(Parameter):
             if self._default_is_unset:
                 self.default = 0
             self.multiple = False
-        elif self.is_flag and self._default_is_unset and not self.required:
-            self.default = False
+        elif self.is_flag:
+            if type is None:
+                self.type = (
+                    _types.BOOL
+                    if isinstance(self.flag_value, bool)
+                    else _types.convert_type(None, self.flag_value)
+                )
+            if self._default_is_unset and not self.required:
+                self.default = False
 
         self.show_default = show_default
         self.show_choices = show_choices
@@ -662,6 +669,16 @@ class Option(Parameter):
                 f"The option {self.name!r} is deprecated and still required. "
                 "A deprecated option cannot be required."
             )
+
+    def to_info_dict(self) -> dict[str, t.Any]:
+        info = super().to_info_dict()
+        info["help"] = self.help
+        info["prompt"] = self.prompt
+        info["is_flag"] = self.is_flag
+        info["flag_value"] = self.flag_value if self.is_flag else None
+        info["count"] = self.count
+        info["hidden"] = self.hidden
+        return info
 
     # decl parsing ----------------------------------------------------------
     def _parse_decls(
@@ -886,6 +903,11 @@ class Argument(Parameter):
         super().__init__(param_decls, required=required, **attrs)
         if self.default is not None and self.nargs == -1:
             raise TypeError("'default' is not supported for nargs=-1.")
+
+    def to_info_dict(self) -> dict[str, t.Any]:
+        info = super().to_info_dict()
+        info["help"] = self.help
+        return info
 
     @property
     def human_readable_name(self) -> str:
