@@ -8,7 +8,6 @@ from __future__ import annotations
 import typing as t
 import warnings
 
-from ._parsing import _Argument, _Option, _Parser, _State, normalize_opt, split_opt
 from ._sentinel import FLAG_NEEDS_VALUE, UNSET
 from .exceptions import BadArgumentUsage, BadOptionUsage, NoSuchOption, UsageError
 
@@ -24,21 +23,10 @@ __all__ = [
     "split_arg_string",
 ]
 
-
-def split_arg_string(string: str) -> list[str]:
-    from .shell_completion import split_arg_string as _impl
-
-    return _impl(string)
-
-
-_DEPRECATED = {
-    "Argument": (_Argument, "'parser.Argument' is deprecated and will be removed in Click 9.0. The old parser is available in 'optparse'."),
-    "Option": (_Option, "'parser.Option' is deprecated and will be removed in Click 9.0. The old parser is available in 'optparse'."),
-    "OptionParser": (_Parser, "'parser.OptionParser' is deprecated and will be removed in Click 9.0. The old parser is available in 'optparse'."),
-    "ParsingState": (_State, "'parser.ParsingState' is deprecated and will be removed in Click 9.0. The old parser is available in 'optparse'."),
-    "normalize_opt": (normalize_opt, "'parser.normalize_opt' is deprecated and will be removed in Click 9.0. The old parser is available in 'optparse'."),
-    "split_opt": (split_opt, "'parser.split_opt' is deprecated and will be removed in Click 9.0. The old parser is available in 'optparse'."),
-}
+_OPTPARSE = (
+    " is deprecated and will be removed in Click 9.0. The old parser is "
+    "available in 'optparse'."
+)
 
 
 def __getattr__(name: str) -> t.Any:
@@ -49,9 +37,23 @@ def __getattr__(name: str) -> t.Any:
             DeprecationWarning,
             stacklevel=2,
         )
+        from .shell_completion import split_arg_string
+
         return split_arg_string
-    if name in _DEPRECATED:
-        obj, message = _DEPRECATED[name]
-        warnings.warn(message, DeprecationWarning, stacklevel=2)
-        return obj
+
+    mapping = {
+        "Argument": ("_Argument", "parser.Argument"),
+        "Option": ("_Option", "parser.Option"),
+        "OptionParser": ("_Parser", "parser.OptionParser"),
+        "ParsingState": ("_State", "parser.ParsingState"),
+        "normalize_opt": ("normalize_opt", "parser.normalize_opt"),
+        "split_opt": ("split_opt", "parser.split_opt"),
+    }
+    if name in mapping:
+        attr, label = mapping[name]
+        warnings.warn(f"'{label}'{_OPTPARSE}", DeprecationWarning, stacklevel=2)
+        from . import _parsing
+
+        return getattr(_parsing, attr)
+
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

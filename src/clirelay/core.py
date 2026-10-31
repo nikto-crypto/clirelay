@@ -648,7 +648,6 @@ class Option(Parameter):
             flag_value = not (self.default if isinstance(self.default, bool) else False)
 
         self.is_flag = bool(is_flag)
-        self.is_bool_flag = is_flag and isinstance(flag_value, bool)
         self.flag_value = flag_value
         self.count = count
 
@@ -770,6 +769,10 @@ class Option(Parameter):
     @property
     def flag_activation_value(self) -> t.Any:
         return self.flag_value
+
+    @property
+    def is_bool_flag(self) -> bool:
+        return self.is_flag and isinstance(self.flag_value, bool)
 
     def get_default(
         self, ctx: Context, call: bool = True
@@ -1662,3 +1665,27 @@ class _DevNull:
 
     def flush(self) -> None:
         pass
+
+
+_DEPRECATED_CORE = {
+    "BaseCommand": (
+        "Command",
+        "'BaseCommand' is deprecated and will be removed in Click 9.0. "
+        "Use 'Command' instead.",
+    ),
+    "MultiCommand": (
+        "Group",
+        "'MultiCommand' is deprecated and will be removed in Click 9.0. "
+        "Use 'Group' instead.",
+    ),
+}
+
+
+def __getattr__(name: str) -> t.Any:
+    if name in _DEPRECATED_CORE:
+        import warnings
+
+        target, message = _DEPRECATED_CORE[name]
+        warnings.warn(message, DeprecationWarning, stacklevel=2)
+        return globals()[target]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

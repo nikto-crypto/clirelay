@@ -150,3 +150,50 @@ __all__ = [
     "strip_ansi",
     "WIN",
 ]
+
+
+_DEPRECATED = {
+    "LazyFile": "'clirelay.utils.LazyFile' is deprecated and will be removed in Click 9.0.",
+    "KeepOpenFile": "'clirelay.utils.KeepOpenFile' is deprecated and will be removed in Click 9.0.",
+    "PacifyFlushWrapper": "'clirelay.utils.PacifyFlushWrapper' is deprecated and will be removed in Click 9.0.",
+    "safecall": "'clirelay.utils.safecall' is deprecated and will be removed in Click 9.0.",
+    "make_default_short_help": "'clirelay.utils.make_default_short_help' is deprecated and will be removed in Click 9.0.",
+    "get_text_stream": "'clirelay.utils.get_text_stream' is deprecated and will be removed in Click 9.0.",
+    "get_binary_stream": "'clirelay.utils.get_binary_stream' is deprecated and will be removed in Click 9.0.",
+}
+
+
+def __getattr__(name: str) -> t.Any:
+    if name not in _DEPRECATED:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    import warnings
+
+    warnings.warn(_DEPRECATED[name], DeprecationWarning, stacklevel=2)
+    if name == "LazyFile":
+        from ._files import LazyFile
+
+        return LazyFile
+    if name == "KeepOpenFile":
+        from ._files import KeepOpenFile
+
+        return KeepOpenFile
+    if name == "PacifyFlushWrapper":
+        from ._streams import PacifyFlushWrapper
+
+        return PacifyFlushWrapper
+    if name == "safecall":
+        from ._streams import safecall
+
+        return safecall
+    if name == "make_default_short_help":
+        from .core import _make_default_short_help
+
+        return _make_default_short_help
+    if name == "get_text_stream":
+        from ._streams import get_text_stream
+
+        return get_text_stream
+    if name == "get_binary_stream":
+        from ._streams import get_binary_stream
+
+        return get_binary_stream

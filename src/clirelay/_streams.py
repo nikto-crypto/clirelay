@@ -63,6 +63,37 @@ def _find_binary_writer(stream: t.IO[t.Any]) -> t.BinaryIO | None:
     return None
 
 
+def safecall(func: t.Callable[..., t.Any]) -> t.Callable[..., t.Any]:
+    """Wrap *func* so any exception it raises is swallowed (returns ``None``)."""
+
+    def wrapper(*args: t.Any, **kwargs: t.Any) -> t.Any:
+        try:
+            return func(*args, **kwargs)
+        except Exception:
+            return None
+
+    return wrapper
+
+
+class PacifyFlushWrapper:
+    """Wrap a stream so a broken pipe on flush is ignored rather than raised."""
+
+    def __init__(self, wrapped: t.IO[t.Any]) -> None:
+        self.wrapped = wrapped
+
+    def flush(self) -> None:
+        import errno
+
+        try:
+            self.wrapped.flush()
+        except OSError as e:
+            if e.errno != errno.EPIPE:
+                raise
+
+    def __getattr__(self, attr: str) -> t.Any:
+        return getattr(self.wrapped, attr)
+
+
 def open_stream(
     filename: str | os.PathLike[str],
     mode: str = "r",

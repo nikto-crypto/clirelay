@@ -287,25 +287,34 @@ class FloatRange(_NumberRangeBase, FloatParamType):
 class BoolParamType(ParamType):
     name = "boolean"
 
-    _TRUE = {"1", "true", "t", "yes", "y", "on"}
-    _FALSE = {"0", "false", "f", "no", "n", "off", ""}
+    bool_states: t.ClassVar[dict[str, bool]] = {
+        "1": True, "0": False,
+        "yes": True, "no": False,
+        "true": True, "false": False,
+        "on": True, "off": False,
+        "t": True, "f": False,
+        "y": True, "n": False,
+        "": False,
+    }
+
+    @staticmethod
+    def str_to_bool(value: str | bool) -> bool | None:
+        if isinstance(value, bool):
+            return value
+        return BoolParamType.bool_states.get(str(value).strip().lower())
 
     def convert(
         self, value: t.Any, param: Parameter | None, ctx: Context | None
     ) -> t.Any:
-        if value in (True, False):
-            return bool(value)
-        norm = str(value).strip().lower()
-        if norm in self._TRUE:
-            return True
-        if norm in self._FALSE:
-            return False
-        recognized = ", ".join(sorted(self._TRUE | self._FALSE))
-        self.fail(
-            f"{value!r} is not a valid boolean. Recognized values: {recognized}",
-            param,
-            ctx,
-        )
+        rv = self.str_to_bool(value)
+        if rv is None:
+            recognized = ", ".join(sorted(self.bool_states))
+            self.fail(
+                f"{value!r} is not a valid boolean. Recognized values: {recognized}",
+                param,
+                ctx,
+            )
+        return rv
 
     def __repr__(self) -> str:
         return "BOOL"

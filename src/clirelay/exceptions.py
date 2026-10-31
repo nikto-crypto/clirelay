@@ -231,6 +231,8 @@ class Abort(RuntimeError):
 class Exit(RuntimeError):
     """Raised to exit the program with a specific status code."""
 
+    __slots__ = ("exit_code",)
+
     def __init__(self, code: int = 0) -> None:
         self.exit_code = code
 
