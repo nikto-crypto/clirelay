@@ -28,13 +28,11 @@ def get_pager_file(color: bool | None = None) -> t.Iterator[t.TextIO]:
 
 def pager(generator: t.Iterable[str], color: bool | None = None) -> None:
     text = "".join(generator)
-    cmd = os.environ.get("PAGER")
-    if not cmd:
-        if not _isatty():
-            echo(text, nl=False)
-            return
-        cmd = "less"
-    _pipe_to_pager(cmd, text, color)
+    if not _isatty():
+        echo(text, nl=False, color=color)
+        return
+    cmd = os.environ.get("PAGER") or "less"
+    _pipe_to_pager(cmd, f"{text}\n", color)
 
 
 def _pipe_to_pager(cmd: str, text: str, color: bool | None) -> None:
