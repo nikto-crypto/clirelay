@@ -67,6 +67,8 @@ a routine step risks touching forbidden material.)
 | fuzz (Hypothesis-style) | 2026-10-31 | 22,255/22,255 (test_generated) | seeded spec×argv generator, ≥20k invocations |
 | 6. terminal (PTY) | 2026-10-31 | 6/6 (test_terminal) | edit via EDITOR, echo_via_pager via PAGER, getchar via pty |
 | **full suite** | 2026-10-31 | **286 passed, 8 skipped** | `CLIRELAY_REQUIRE_ORACLE=1 pytest -p no:warnings` on Python 3.15 |
+| fresh review (step 7) | 2026-10-31 | 12 fixes + 1 exempt | an independence-bound subagent (no access to this conversation, oracle black-box only) probed for gaps and found 13 differences; all fixed except #11 which the contract exempts. See `REVIEW_FINDINGS.md`; regressions locked in `tests/differential/test_review.py`. |
+| **full suite (final)** | 2026-10-31 | **321 passed, 0 skipped** | after review fixes; `CLIRELAY_REQUIRE_ORACLE=1 pytest -rs -p no:warnings` on Python 3.15.2 |
 
 ## Unverified / exempt behaviors
 

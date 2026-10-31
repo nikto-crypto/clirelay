@@ -15,7 +15,10 @@ def _norm(obj):
     import json
 
     text = normalize(json.dumps(obj, default=repr, sort_keys=True))
-    # The default help parameter's internal name is exempt from parity.
+    # The build contract explicitly exempts the default help parameter's internal
+    # name ("_click_default_help" in the oracle; ours may differ "only in that
+    # string"). This neutralizes that one exempt field — it is NOT one of the
+    # three harness normalizations and is applied only in this info-dict test.
     return text.replace('"_click_default_help"', '"help"')
 
 
