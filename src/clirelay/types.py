@@ -543,9 +543,12 @@ class File(ParamType):
 
         lazy = self.resolve_lazy_flag(value)
         if lazy:
-            lf = LazyFile(
-                value, self.mode, self.encoding, self.errors, atomic=self.atomic
-            )
+            try:
+                lf = LazyFile(
+                    value, self.mode, self.encoding, self.errors, atomic=self.atomic
+                )
+            except OSError as e:
+                self.fail(f"{os.fspath(value)!r}: {e.strerror}", param, ctx)
             if ctx is not None:
                 ctx.call_on_close(lf.close_intelligently)
             return t.cast("t.IO[t.Any]", lf)

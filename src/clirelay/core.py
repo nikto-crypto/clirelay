@@ -736,20 +736,55 @@ class Option(Parameter):
             parser.add_option(self, self.opts, self.name, action="store_const", const=self.flag_value)
         else:
             action = "append" if self.multiple else "store"
-            parser.add_option(self, self.opts, self.name, action=action, nargs=self.nargs)
+            optional_value = self.prompt is not None and not self.prompt_required
+            parser.add_option(
+                self,
+                self.opts,
+                self.name,
+                action=action,
+                nargs=self.nargs,
+                optional_value=optional_value,
+            )
+
+    def resolve_envvar_value(self, ctx: Context) -> str | None:
+        rv = super().resolve_envvar_value(ctx)
+        if rv is not None:
+            return rv
+        if (
+            self.name is not None
+            and self.allow_from_autoenv
+            and ctx.auto_envvar_prefix is not None
+        ):
+            import os
+
+            envvar = f"{ctx.auto_envvar_prefix}_{self.name.upper()}"
+            rv = os.environ.get(envvar)
+            if rv:
+                return rv
+        return None
 
     def consume_value(
         self, ctx: Context, opts: t.Mapping[str, t.Any]
     ) -> tuple[t.Any, ParameterSource]:
         value = opts.get(self.name)
         source = ParameterSource.COMMANDLINE
+
+        if value is FLAG_NEEDS_VALUE:
+            value = self.prompt_for_value(ctx)
+            return value, ParameterSource.PROMPT
+
         if value is None:
             value = self.value_from_envvar(ctx)
             source = ParameterSource.ENVIRONMENT
         if value is None:
             value = ctx.lookup_default(self.name)
             source = ParameterSource.DEFAULT_MAP
-        if value is None and self.prompt is not None and not ctx.resilient_parsing:
+        if (
+            value is None
+            and self.prompt is not None
+            and self.prompt_required
+            and not ctx.resilient_parsing
+        ):
             value = self.prompt_for_value(ctx)
             source = ParameterSource.PROMPT
         if value is None:
@@ -768,6 +803,7 @@ class Option(Parameter):
             hide_input=self.hide_input,
             show_choices=self.show_choices,
             confirmation_prompt=self.confirmation_prompt,
+            show_default=self.show_default if self.show_default is not None else True,
         )
 
     @property
@@ -783,6 +819,11 @@ class Option(Parameter):
     ) -> t.Any | t.Callable[[], t.Any] | None:
         if self.is_flag and not self.secondary_opts:
             value = super().get_default(ctx, call=call)
+            if not self.is_bool_flag:
+                # Custom flag_value: a truthy default means "this flag's value".
+                if value:
+                    return self.flag_value
+                return value
             if value is None:
                 return False
             return value
@@ -1649,22 +1690,27 @@ def _make_default_short_help(help: str, max_length: int = 45) -> str:
     words = paragraph.split()
     if not words:
         return ""
-    total_length = 0
-    last_index = len(words) - 1
-    result: list[str] = []
-    truncated = False
+    # Consider words up to (and including) the first that ends a sentence.
+    considered: list[str] = []
     for i, word in enumerate(words):
-        total_length += len(word) + (1 if i > 0 else 0)
-        if total_length > max_length:
-            truncated = True
+        considered.append(word)
+        if i != len(words) - 1 and word.endswith("."):
+            break
+
+    full = " ".join(considered)
+    if len(full) <= max_length:
+        return full
+
+    # Truncate, reserving three characters for the trailing ellipsis.
+    result: list[str] = []
+    total = 0
+    for word in considered:
+        new = len(word) + (1 if result else 0)
+        if total + new + 3 > max_length:
             break
         result.append(word)
-        if i != last_index and word.endswith("."):
-            break
-    rv = " ".join(result)
-    if truncated:
-        rv += "..."
-    return rv
+        total += new
+    return " ".join(result) + "..."
 
 
 def _detect_prog_name() -> str:

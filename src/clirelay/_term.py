@@ -29,7 +29,7 @@ def get_pager_file(color: bool | None = None) -> t.Iterator[t.TextIO]:
 def pager(generator: t.Iterable[str], color: bool | None = None) -> None:
     text = "".join(generator)
     if not _isatty():
-        echo(text, nl=False, color=color)
+        echo(text, color=color)
         return
     cmd = os.environ.get("PAGER") or "less"
     _pipe_to_pager(cmd, f"{text}\n", color)
@@ -266,6 +266,11 @@ class ProgressBar:
         self.finished = False
         self.current_item: t.Any = None
         self.entered = False
+        try:
+            self.is_hidden = hidden or not self.file.isatty()
+        except Exception:
+            self.is_hidden = True
+        self._label_shown = False
 
     def __enter__(self) -> ProgressBar:
         self.entered = True
@@ -307,7 +312,14 @@ class ProgressBar:
         self.finished = True
 
     def render_progress(self) -> None:
-        # Terminal rendering is timing-dependent and verified separately.
+        if self.is_hidden:
+            # On a non-terminal, only the label line is emitted (once); the live
+            # bar (timing-dependent) is not drawn.
+            if not self._label_shown:
+                echo(self.label, file=self.file, color=self.color)
+                self._label_shown = True
+            return
+        # Live terminal rendering is timing-dependent and verified via a PTY.
         return None
 
     def render_finish(self) -> None:

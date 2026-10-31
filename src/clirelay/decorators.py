@@ -213,22 +213,23 @@ def version_option(
         message = _("%(prog)s, version %(version)s")
 
     def resolve(ctx: Context) -> str:
-        nonlocal version, package_name, prog_name
         resolved_prog = prog_name or ctx.find_root().info_name
         if version is None:
             name = package_name
             if name is None:
-                name = _guess_package_name()
+                name = _guess_package_name(ctx)
             if name is None:
-                from .exceptions import ClickException
-
-                raise ClickException(
-                    "Could not determine the version for "
-                    f"{resolved_prog!r} automatically."
+                raise RuntimeError(
+                    f"Could not determine the version for {name} automatically."
                 )
             import importlib.metadata
 
-            ver = importlib.metadata.version(name)
+            try:
+                ver = importlib.metadata.version(name)
+            except importlib.metadata.PackageNotFoundError:
+                raise RuntimeError(
+                    f"{name!r} is not installed. Try passing 'package_name' instead."
+                ) from None
         else:
             ver = version
         return message % {"prog": resolved_prog, "version": ver, "package": package_name}
@@ -276,13 +277,18 @@ def help_option(*param_decls: str, **kwargs: t.Any) -> t.Callable[[FC], FC]:
     return option(*param_decls, **kwargs)
 
 
-def _guess_package_name() -> str | None:
+def _guess_package_name(ctx: Context) -> str | None:
+    """Best-effort distribution name from the command's callback module.
+
+    Mirrors the oracle: a command defined in a script (``__main__``, no package)
+    yields ``None`` rather than a wrong guess.
+    """
     import sys
 
-    frame = sys._getframe()
-    while frame is not None:
-        name = frame.f_globals.get("__name__")
-        if name and name != __name__ and name != "clirelay.core":
-            return name.partition(".")[0]
-        frame = frame.f_back
-    return None
+    callback = ctx.find_root().command.callback
+    module_name = getattr(callback, "__module__", None)
+    module = sys.modules.get(module_name) if module_name else None
+    package = getattr(module, "__package__", None)
+    if not package:
+        return None
+    return package.partition(".")[0]

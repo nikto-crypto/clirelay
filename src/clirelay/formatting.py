@@ -82,7 +82,7 @@ class HelpFormatter:
         if width is None:
             width = FORCED_WIDTH
         if width is None:
-            width = min(_detect_columns(), max_width)
+            width = max(min(_detect_columns(), max_width) - 2, 50)
         self.width = width
         self.current_indent = 0
         self.buffer: list[str] = []

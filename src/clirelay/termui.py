@@ -46,7 +46,9 @@ def _build_prompt(
     prompt = text
     if type is not None and show_choices and isinstance(type, Choice):
         prompt = f"{prompt} ({', '.join(map(str, type._display_choices()))})"
-    if default is not None and show_default:
+    if isinstance(show_default, str):
+        prompt = f"{prompt} [({show_default})]"
+    elif default is not None and show_default:
         prompt = f"{prompt} [{_format_default(default)}]"
     return f"{prompt}{suffix}"
 

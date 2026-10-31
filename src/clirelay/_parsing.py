@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import typing as t
 
+from ._sentinel import FLAG_NEEDS_VALUE
 from .exceptions import BadArgumentUsage, BadOptionUsage, NoSuchOption, UsageError
 
 if t.TYPE_CHECKING:
@@ -52,12 +53,14 @@ class _Option:
         action: str | None = None,
         nargs: int = 1,
         const: t.Any = None,
+        optional_value: bool = False,
     ) -> None:
         self.obj = obj
         self.dest = dest
         self.action = action or "store"
         self.nargs = nargs
         self.const = const
+        self.optional_value = optional_value
         self._short_opts: list[str] = []
         self._long_opts: list[str] = []
         self.prefixes: set[str] = set()
@@ -133,9 +136,13 @@ class _Parser:
         action: str | None = None,
         nargs: int = 1,
         const: t.Any = None,
+        optional_value: bool = False,
     ) -> None:
         opts = [normalize_opt(opt, self.ctx) for opt in opts]
-        option = _Option(obj, opts, dest, action=action, nargs=nargs, const=const)
+        option = _Option(
+            obj, opts, dest, action=action, nargs=nargs, const=const,
+            optional_value=optional_value,
+        )
         self._opt_prefixes.update(option.prefixes)
         for o in option._short_opts:
             self._short_opt[o] = option
@@ -240,6 +247,11 @@ class _Parser:
         if nargs == 1:
             if inline_value is not None:
                 value: t.Any = inline_value
+            elif option.optional_value:
+                if state.rargs and state.rargs[0][:1] not in self._opt_prefixes:
+                    value = state.rargs.pop(0)
+                else:
+                    value = FLAG_NEEDS_VALUE
             elif state.rargs:
                 value = state.rargs.pop(0)
             else:

@@ -87,9 +87,14 @@ class StreamMixer:
 
 class _NamedTextIO(io.TextIOWrapper):
     _isatty = False
+    _name: str | None = None
 
     def isatty(self) -> bool:
         return self._isatty
+
+    @property
+    def name(self) -> t.Any:  # type: ignore[override]
+        return self._name
 
 
 def make_input_stream(
@@ -204,11 +209,16 @@ class CliRunner:
         old_env: dict[str, str | None] = {}
         mixer = StreamMixer()
 
+        from . import formatting as _formatting
+
+        old_forced_width = _formatting.FORCED_WIDTH
+        _formatting.FORCED_WIDTH = 80
+
         echo_input: EchoingStdin | None = None
-        text_input = io.TextIOWrapper(bytes_input, encoding=self.charset)
         if self.echo_stdin:
             bytes_input = echo_input = EchoingStdin(bytes_input, mixer.stdout)  # type: ignore[assignment]
-            text_input = io.TextIOWrapper(bytes_input, encoding=self.charset)
+        text_input = _NamedTextIO(bytes_input, encoding=self.charset)
+        text_input._name = "<stdin>"
 
         sys.stdin = text_input
         text_stdout = _NamedTextIO(
@@ -219,6 +229,8 @@ class CliRunner:
         )
         text_stdout._isatty = color
         text_stderr._isatty = color
+        text_stdout._name = "<stdout>"
+        text_stderr._name = "<stderr>"
         sys.stdout = text_stdout
         sys.stderr = text_stderr
 
@@ -243,6 +255,7 @@ class CliRunner:
                 else:
                     os.environ[key] = value
             sys.stdin, sys.stdout, sys.stderr = old_stdin, old_stdout, old_stderr
+            _formatting.FORCED_WIDTH = old_forced_width
 
     def invoke(
         self,

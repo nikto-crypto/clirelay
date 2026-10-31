@@ -49,7 +49,12 @@ class UsageError(ClickException):
     def __init__(self, message: str, ctx: Context | None = None) -> None:
         super().__init__(message)
         self.ctx = ctx
-        self.cmd = self.ctx.command if self.ctx else None
+
+    @property
+    def cmd(self) -> t.Any:
+        # Resolve from ctx each time, so a ctx attached after construction (by
+        # augment_usage_errors) still yields the usage hint.
+        return self.ctx.command if self.ctx is not None else None
 
     def show(self, file: t.IO[t.Any] | None = None) -> None:
         if file is None:
