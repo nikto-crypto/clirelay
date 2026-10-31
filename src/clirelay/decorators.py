@@ -84,9 +84,9 @@ def _param_memo(f: t.Callable[..., t.Any], param: Parameter) -> None:
     if isinstance(f, Command):
         f.params.append(param)
     else:
-        if not hasattr(f, "__click_params__"):
-            f.__click_params__ = []  # type: ignore[attr-defined]
-        f.__click_params__.append(param)  # type: ignore[attr-defined]
+        if not hasattr(f, "__clirelay_params__"):
+            f.__clirelay_params__ = []  # type: ignore[attr-defined]
+        f.__clirelay_params__.append(param)  # type: ignore[attr-defined]
 
 
 def command(
@@ -113,11 +113,11 @@ def command(
         params = attr_params if attr_params is not None else []
 
         try:
-            decorator_params = f.__click_params__  # type: ignore[attr-defined]
+            decorator_params = f.__clirelay_params__  # type: ignore[attr-defined]
         except AttributeError:
             pass
         else:
-            del f.__click_params__  # type: ignore[attr-defined]
+            del f.__clirelay_params__  # type: ignore[attr-defined]
             params.extend(reversed(decorator_params))
 
         if attrs.get("help") is None:
