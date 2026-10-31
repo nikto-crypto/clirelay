@@ -47,3 +47,5 @@ a routine step risks touching forbidden material.)
 |-------|------|------------------------|-------|
 | (bootstrap) | 2026-10-31 | n/a | repo scaffold, venv on oracle Python 3.15, oracle black-box smoke test passing |
 | 1. types | 2026-10-31 | 321/321 (types micro-diff) | ParamType hierarchy, convert/to_info_dict/get_metavar/repr for every type, convert_type, ranges, Choice (incl. enum & case-insensitive), File/Path, plus foundations (sentinel, ANSI style/strip, exceptions, globals, stream layer, echo/format_filename/get_app_dir) all matched against oracle |
+| 5. help formatting | 2026-10-31 | 91/91 (formatting micro-diff) | wrap_text (preserve + non-preserve), HelpFormatter (usage/dl/section/text), term_len/measure_table/join_options |
+| 2-6. params/parsing/commands/groups/context/errors | 2026-10-31 | 140/140 (command subprocess diff) | parser engine, Parameter/Option/Argument, Command/Group/CommandCollection, Context, decorators, CliRunner, help records with extras, usage errors, subcommand dispatch, count/flag/multiple/nargs options — matched end-to-end via CliRunner in subprocesses |
