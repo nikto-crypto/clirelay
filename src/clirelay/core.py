@@ -763,7 +763,6 @@ class Option(Parameter):
             hide_input=self.hide_input,
             show_choices=self.show_choices,
             confirmation_prompt=self.confirmation_prompt,
-            value_proc=lambda x: self.process_value(ctx, x),
         )
 
     @property

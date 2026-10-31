@@ -212,7 +212,7 @@ class CliRunner:
 
         sys.stdin = text_input
         text_stdout = _NamedTextIO(
-            mixer.stdout, encoding=self.charset, line_buffering=False, write_through=True
+            mixer.stdout, encoding=self.charset, line_buffering=True, write_through=False
         )
         text_stderr = _NamedTextIO(
             mixer.stderr, encoding=self.charset, line_buffering=False, write_through=True

@@ -55,7 +55,6 @@ def echo(
             text = text + "\n"
 
     if not text:
-        file.flush()
         return
 
     if isinstance(text, (bytes, bytearray)):
@@ -71,7 +70,6 @@ def echo(
         text = strip_ansi(text)
 
     file.write(text)
-    file.flush()
 
 
 def _posixify(name: str) -> str:

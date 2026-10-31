@@ -72,7 +72,8 @@ def prompt(
     def prompt_func(text: str) -> str:
         try:
             echo(text, nl=False, err=err)
-            return _read_line(hide_input)
+            _flush_if_interactive(err)
+            return _read_input(hide_input, err)
         except (KeyboardInterrupt, EOFError):
             if hide_input:
                 echo(None, err=err)
@@ -83,7 +84,12 @@ def prompt(
         value_proc = lambda x: param_type(x, None, None)  # noqa: E731
 
     prompt_str = _build_prompt(
-        text, prompt_suffix, show_default, default, show_choices, convert_type(type, default) if type is not None or default is not None else None
+        text,
+        prompt_suffix,
+        show_default,
+        default,
+        show_choices,
+        convert_type(type, default) if type is not None or default is not None else None,
     )
 
     if confirmation_prompt:
@@ -92,13 +98,12 @@ def prompt(
         confirm_str = _build_prompt(confirmation_prompt, prompt_suffix)
 
     while True:
-        value = _prompt_once(prompt_str, prompt_func, default, value_proc, err)
+        value = _prompt_once(prompt_str, prompt_func, default, value_proc, err, hide_input)
         if not confirmation_prompt:
             return value
         while True:
-            value2 = _prompt_once(confirm_str, prompt_func, None, value_proc, err)
-            is_empty = False
-            if value2 is not None or is_empty:
+            value2 = _prompt_once(confirm_str, prompt_func, None, value_proc, err, hide_input)
+            if value2 is not None:
                 break
         if value == value2:
             return value
@@ -111,37 +116,55 @@ def _prompt_once(
     default: t.Any,
     value_proc: t.Callable[[str], t.Any],
     err: bool,
+    hide_input: bool = False,
 ) -> t.Any:
+    def report(message: str, value: str) -> None:
+        if hide_input:
+            message = message.replace(repr(value), "'***'")
+        echo(f"Error: {message}", err=err)
+
     while True:
         value = prompt_func(prompt_str)
         if value:
             try:
                 return value_proc(value)
             except UsageError as e:
-                if hasattr(e, "message"):
-                    echo(f"Error: {e.format_message()}", err=err)
+                report(e.message, value)
                 continue
         elif default is not None:
             try:
                 return value_proc(default) if isinstance(default, str) else default
             except UsageError as e:
-                echo(f"Error: {e.format_message()}", err=err)
+                report(e.message, value)
                 continue
         else:
             return default
 
 
-def _read_line(hide_input: bool) -> str:
+def _flush_if_interactive(err: bool) -> None:
     import sys
 
-    if hide_input:
-        import getpass
+    stream = sys.stderr if err else sys.stdout
+    try:
+        if stream.isatty():
+            stream.flush()
+    except Exception:
+        pass
 
-        return getpass.getpass(prompt="")
+
+def _read_input(hide_input: bool, err: bool) -> str:
+    import sys
+
     line = sys.stdin.readline()
     if not line:
         raise EOFError()
-    return line.rstrip("\n").rstrip("\r")
+    value = line.rstrip("\n").rstrip("\r")
+    if hide_input:
+        # the value is not echoed; only the line break is shown
+        echo("", err=err)
+    else:
+        echo(value, err=err)
+    return value
 
 
 def confirm(
@@ -156,7 +179,8 @@ def confirm(
     while True:
         try:
             echo(prompt_str, nl=False, err=err)
-            value = _read_line(False).lower().strip()
+            _flush_if_interactive(err)
+            value = _read_input(False, err).lower().strip()
         except (KeyboardInterrupt, EOFError):
             raise Abort() from None
         if value in ("y", "yes"):
