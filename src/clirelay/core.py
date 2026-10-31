@@ -627,39 +627,27 @@ class Option(Parameter):
 
         # determine flag-ness
         if is_flag is None:
-            if flag_value is not UNSET:
-                is_flag = True
-            elif self.secondary_opts:
-                is_flag = True
-            else:
-                is_flag = bool(self.is_bool_flag_candidate) if False else False
-            if not is_flag and self.secondary_opts:
-                is_flag = True
-        else:
-            if is_flag is False and flag_value is not UNSET:
-                pass
+            is_flag = flag_value is not UNSET or bool(self.secondary_opts)
 
-        self.default_from_decls = default_is_missing
-
-        if is_flag and default_is_missing and not self.required:
-            self.default = False if not self.secondary_opts else self.default
-
-        if flag_value is UNSET:
-            flag_value = not (self.default if isinstance(self.default, bool) else False)
-
-        self.is_flag = bool(is_flag)
-        self.flag_value = flag_value
+        self.is_flag = bool(is_flag) and not count
         self.count = count
 
+        if flag_value is UNSET:
+            if self.secondary_opts:
+                flag_value = True
+            else:
+                flag_value = not (
+                    self.default if isinstance(self.default, bool) else False
+                )
+        self.flag_value = flag_value
+
         if count:
-            self.is_flag = False
             if type is None:
                 self.type = _types.IntRange(min=0)
             if self._default_is_unset:
                 self.default = 0
             self.multiple = False
-
-        if is_flag and self._default_is_unset and not self.secondary_opts:
+        elif self.is_flag and self._default_is_unset and not self.required:
             self.default = False
 
         self.show_default = show_default
@@ -875,10 +863,6 @@ class Option(Parameter):
         if isinstance(default_value, (list, tuple)):
             return ", ".join(str(d) for d in default_value)
         return str(default_value)
-
-    @property
-    def is_bool_flag_candidate(self) -> bool:
-        return bool(self.secondary_opts)
 
 
 class Argument(Parameter):

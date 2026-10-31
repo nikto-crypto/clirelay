@@ -296,8 +296,9 @@ def _distribute(
     spos: int | None = None
     for i, arg in enumerate(args_spec):
         if arg.nargs == -1:
+            if spos is not None:
+                raise TypeError("Cannot have two nargs < 0")
             spos = i
-            break
 
     if spos is None:
         # no variadic: assign left to right
