@@ -88,4 +88,4 @@ Other Python versions run the unit tests only.
 
 ## License
 
-MIT. See `LICENSE.txt`.
+MIT. See `LICENSE`.

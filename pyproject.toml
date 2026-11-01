@@ -7,7 +7,7 @@ name = "clirelay"
 version = "8.5.0"
 description = "A composable command-line interface toolkit, built from scratch."
 readme = "README.md"
-license = { file = "LICENSE.txt" }
+license = { file = "LICENSE" }
 authors = [{ name = "Nick Serapiglia" }]
 maintainers = [{ name = "Nick Serapiglia" }]
 requires-python = ">=3.10"
