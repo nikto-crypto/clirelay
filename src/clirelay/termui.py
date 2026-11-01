@@ -59,6 +59,24 @@ def _format_default(default: t.Any) -> t.Any:
     return default
 
 
+#: Reads one visible line. The typed answer is NOT echoed by this library: a
+#: real terminal echoes it on its own, and piped input shows nothing. CliRunner
+#: replaces this so the answer reappears in its captured output.
+visible_prompt_func: t.Callable[[str], str] = input
+
+#: Whether the prompt currently being read targets stderr (``err=True``). The
+#: default readers ignore it; CliRunner's replacement readers use it to echo the
+#: answer onto the same stream the prompt went to.
+_prompt_target_err: bool = False
+
+
+def hidden_prompt_func(prompt: str) -> str:
+    """Reads one line without echoing it, writing *prompt* itself (via getpass)."""
+    import getpass
+
+    return getpass.getpass(prompt)
+
+
 def prompt(
     text: str,
     default: t.Any = None,
@@ -72,10 +90,17 @@ def prompt(
     show_choices: bool = True,
 ) -> t.Any:
     def prompt_func(text: str) -> str:
+        global _prompt_target_err
+        f = hidden_prompt_func if hide_input else visible_prompt_func
+        _prompt_target_err = err
         try:
+            # Hidden input hands the prompt to getpass so the terminal echo is
+            # suppressed; visible input writes the prompt here and reads a bare
+            # line. Either way this library never echoes the answer itself.
+            if hide_input:
+                return f(text)
             echo(text, nl=False, err=err)
-            _flush_if_interactive(err)
-            return _read_input(hide_input, err)
+            return f("")
         except (KeyboardInterrupt, EOFError):
             if hide_input:
                 echo(None, err=err)
@@ -142,32 +167,6 @@ def _prompt_once(
         # Empty input with no default: ask again (end of input raises Abort).
 
 
-def _flush_if_interactive(err: bool) -> None:
-    import sys
-
-    stream = sys.stderr if err else sys.stdout
-    try:
-        if stream.isatty():
-            stream.flush()
-    except Exception:
-        pass
-
-
-def _read_input(hide_input: bool, err: bool) -> str:
-    import sys
-
-    line = sys.stdin.readline()
-    if not line:
-        raise EOFError()
-    value = line.rstrip("\n").rstrip("\r")
-    if hide_input:
-        # the value is not echoed; only the line break is shown
-        echo("", err=err)
-    else:
-        echo(value, err=err)
-    return value
-
-
 def confirm(
     text: str,
     default: bool | None = False,
@@ -176,12 +175,14 @@ def confirm(
     show_default: bool = True,
     err: bool = False,
 ) -> bool:
+    global _prompt_target_err
     prompt_str = _build_confirm_prompt(text, default, prompt_suffix, show_default)
     while True:
         try:
+            _prompt_target_err = err
             echo(prompt_str, nl=False, err=err)
-            _flush_if_interactive(err)
-            value = _read_input(False, err).lower().strip()
+            # The answer is not echoed by this library (see visible_prompt_func).
+            value = visible_prompt_func("").lower().strip()
         except (KeyboardInterrupt, EOFError):
             raise Abort() from None
         if value in ("y", "yes"):
@@ -211,12 +212,6 @@ def _build_confirm_prompt(
     if show_default:
         return f"{text} {choices}{suffix}"
     return f"{text}{suffix}"
-
-
-def hidden_prompt_func(prompt: str) -> str:
-    import getpass
-
-    return getpass.getpass(prompt=prompt)
 
 
 # -- terminal-only helpers (refined in a later phase) -----------------------

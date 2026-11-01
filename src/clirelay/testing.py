@@ -234,6 +234,37 @@ class CliRunner:
         sys.stdout = text_stdout
         sys.stderr = text_stderr
 
+        from . import termui as _termui
+
+        old_visible = _termui.visible_prompt_func
+        old_hidden = _termui.hidden_prompt_func
+
+        def _prompt_out() -> t.IO[str]:
+            # Echo onto the same stream the prompt went to (stderr when err=True).
+            return sys.stderr if _termui._prompt_target_err else sys.stdout
+
+        @_pause_echo(echo_input)  # type: ignore[arg-type]
+        def visible_input(prompt: str | None = None) -> str:
+            out = _prompt_out()
+            out.write(prompt or "")
+            line = text_input.readline()
+            if not line:
+                raise EOFError()
+            val = line.rstrip("\r\n")
+            out.write(f"{val}\n")
+            return val
+
+        @_pause_echo(echo_input)  # type: ignore[arg-type]
+        def hidden_input(prompt: str | None = None) -> str:
+            _prompt_out().write(f"{prompt or ''}\n")
+            line = text_input.readline()
+            if not line:
+                raise EOFError()
+            return line.rstrip("\r\n")
+
+        _termui.visible_prompt_func = visible_input
+        _termui.hidden_prompt_func = hidden_input
+
         for key, value in env.items():
             old_env[key] = os.environ.get(key)
             if value is None:
@@ -255,6 +286,8 @@ class CliRunner:
                 else:
                     os.environ[key] = value
             sys.stdin, sys.stdout, sys.stderr = old_stdin, old_stdout, old_stderr
+            _termui.visible_prompt_func = old_visible
+            _termui.hidden_prompt_func = old_hidden
             _formatting.FORCED_WIDTH = old_forced_width
 
     def invoke(

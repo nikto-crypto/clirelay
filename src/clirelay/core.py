@@ -187,6 +187,9 @@ class Context:
         self._depth = 0
         self._parameter_source: dict[str, ParameterSource] = {}
         self._exit_stack = ExitStack()
+        # Positional tokens seen during parsing; completion uses it to locate
+        # the argument at the cursor.
+        self._positional_given = 0
 
     # -- properties ---------------------------------------------------------
     @property
@@ -240,7 +243,7 @@ class Context:
     def __exit__(self, exc_type: t.Any, exc_value: t.Any, tb: t.Any) -> None:
         self._depth -= 1
         if self._depth == 0:
-            self.close()
+            self._close(exc_type, exc_value, tb)
         pop_context()
 
     @contextmanager
@@ -261,7 +264,12 @@ class Context:
         return self._exit_stack.enter_context(context_manager)
 
     def close(self) -> None:
-        self._exit_stack.close()
+        self._close(None, None, None)
+
+    def _close(self, exc_type: t.Any, exc_value: t.Any, tb: t.Any) -> None:
+        # Unwind registered resources, handing each the exception (if any) that
+        # is propagating out of the command, exactly as a ``with`` block would.
+        self._exit_stack.__exit__(exc_type, exc_value, tb)
         self._exit_stack = ExitStack()
 
     # -- object lookup ------------------------------------------------------
@@ -485,9 +493,10 @@ class Parameter:
             return check(value)
 
         if self.multiple:
-            return tuple(check(v) for v in value)
-        if self.nargs == -1:
-            return tuple(check(v) for v in value)
+            if self.nargs == 1:
+                return tuple(check(v) for v in value)
+            # Each occurrence contributes a tuple of ``nargs`` values.
+            return tuple(tuple(check(x) for x in v) for v in value)
         if self.nargs != 1:
             return tuple(check(v) for v in value)
         return check(value)
@@ -1168,6 +1177,7 @@ class Command:
 
         ctx.args = args
         ctx._opt_prefixes.update(parser._opt_prefixes)
+        ctx._positional_given = parser._positional_given
         return args
 
     # -- usage / help -------------------------------------------------------
@@ -1314,7 +1324,10 @@ class Command:
                     rv = self.invoke(ctx)
                     if not standalone_mode:
                         return rv
-                    ctx.exit()
+                # The context (and its resources) closes cleanly above before
+                # the normal exit is raised, so registered resources see no
+                # exception on a successful run.
+                ctx.exit()
             except (EOFError, KeyboardInterrupt) as e:
                 echo(file=sys.stderr)
                 raise Abort() from e
@@ -1366,9 +1379,24 @@ class Command:
                     if name.startswith(incomplete)
                 )
         else:
+            # Complete only the argument at the current cursor position. Walk
+            # the arguments in order, charging each the positional values it
+            # already consumed; the first one still expecting a value (or a
+            # variadic argument) is the one being completed.
+            remaining = ctx._positional_given
+            active: Argument | None = None
             for param in self.get_params(ctx):
-                if isinstance(param, Argument):
-                    results.extend(param.shell_complete(ctx, incomplete))
+                if not isinstance(param, Argument):
+                    continue
+                if param.nargs == -1:
+                    active = param
+                    break
+                if remaining < param.nargs:
+                    active = param
+                    break
+                remaining -= param.nargs
+            if active is not None:
+                results.extend(active.shell_complete(ctx, incomplete))
         return results
 
 
@@ -1634,10 +1662,10 @@ class Group(Command):
         if cmd is None and not ctx.resilient_parsing:
             if split_opt(cmd_name)[0]:
                 self.parse_args(ctx, ctx.args)
-            possibilities = [
-                name
-                for name in self.list_commands(ctx)
-            ]
+            # Suggestions are drawn from the registered commands directly, not
+            # from ``list_commands`` (which a subclass may override), matching
+            # the reference's call structure.
+            possibilities = list(self.commands)
             import difflib
 
             matches = difflib.get_close_matches(original_cmd_name, possibilities)

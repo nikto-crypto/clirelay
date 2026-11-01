@@ -123,8 +123,10 @@ def format_filename(
     text = os.fspath(filename)
     if isinstance(text, bytes):
         return text.decode(_FS_ENCODING, "replace")
-    # Normalize any surrogate-escaped bytes to replacement characters.
-    return text.encode(_FS_ENCODING, "replace").decode(_FS_ENCODING, "replace")
+    # Round-trip through the filesystem encoding so surrogate-escaped bytes
+    # become the real bytes again and then decode to replacement characters
+    # (e.g. a stray ``\xff`` shows as ``�``, not a ``\udcff`` escape).
+    return os.fsencode(text).decode(_FS_ENCODING, "replace")
 
 
 def open_file(

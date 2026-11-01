@@ -34,7 +34,15 @@ A new session continues from here under the same rules. Keep this file current.
   Includes real `progressbar` terminal rendering (no more stub), `COLUMNS`-driven
   width in a real process, non-UTF-8 `echo`, decoration-time `version_option`
   package detection, and completion for Path/nargs/used-options/custom groups.
-- [x] Current: **432 passed, 0 skipped** on Python 3.15.2.
+- [x] Fix round 2 (second external evaluation, real processes + PTYs): 11 findings
+  confirmed against the oracle three ways (CliRunner, piped subprocess, pty) and
+  fixed; regressions in `tests/differential/test_fix_round2.py`. Key change:
+  prompts no longer echo input — the echo is `CliRunner`'s, via replaced
+  `visible_prompt_func`/`hidden_prompt_func` readers. Also: env-var list splitting
+  by type, `multiple`+`nargs` tuples, cursor-position completion, `DateTime`
+  singular message, name-less `ParamType`, `with_resource` exception propagation,
+  undecodable path bytes, and `Group` subclass hook order.
+- [x] Current: **493 passed, 0 skipped** on Python 3.15.2.
 
 ## Remaining / polish
 
@@ -52,8 +60,13 @@ A new session continues from here under the same rules. Keep this file current.
   `max_content_width` (default 80). Widths are also exercised via the
   `terminal_width` context arg.
 - Deprecation notices are echoed to stderr as output (not Python warnings).
-- Prompts echo the typed input; errors show `e.message` (bare); hidden invalid
-  input is masked `'***'`; stdout is line-buffered / stderr write-through so the
-  combined output interleaves like the oracle.
+- Prompts do NOT echo the typed input. The echo seen under `CliRunner` comes from
+  `CliRunner` replacing `termui.visible_prompt_func`/`hidden_prompt_func`; a real
+  terminal echoes it, piped input shows nothing. The echo lands on the same stream
+  as the prompt (stderr when `err=True`). Errors show `e.message` (bare); hidden
+  invalid input is masked `'***'`; stdout is line-buffered / stderr write-through
+  so the combined output interleaves like the oracle.
+- Always verify prompt/interaction behavior three ways (CliRunner, piped
+  subprocess, pty). CliRunner agreement alone is not evidence.
 - `did you mean` lists are `sorted(get_close_matches(...))`.
 - Pager uses `$PAGER` only when stdout is a tty and appends a trailing newline.

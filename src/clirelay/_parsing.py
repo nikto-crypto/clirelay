@@ -127,6 +127,7 @@ class _Parser:
         self._long_opt: dict[str, _Option] = {}
         self._opt_prefixes = {"-", "--"}
         self._args: list[_Argument] = []
+        self._positional_given = 0
 
     def add_option(
         self,
@@ -163,7 +164,15 @@ class _Parser:
         except UsageError:
             if self.ctx is None or not self.ctx.resilient_parsing:
                 raise
-        self._process_positionals(state)
+        # Number of positional tokens available for arguments, recorded before
+        # they are distributed. Completion uses it to find the argument at the
+        # cursor.
+        self._positional_given = len(state.largs)
+        try:
+            self._process_positionals(state)
+        except UsageError:
+            if self.ctx is None or not self.ctx.resilient_parsing:
+                raise
         return state.opts, state.largs, state.order
 
     # -- options ------------------------------------------------------------

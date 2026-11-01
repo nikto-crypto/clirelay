@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+Behavior corrections from a second external evaluation that drove both libraries
+through real processes and pseudo-terminals ("Fix round 2"). Each was confirmed
+against the reference in all three run modes (CliRunner, piped subprocess,
+pseudo-terminal) and is covered in `tests/differential/test_fix_round2.py`.
+
+- Prompts no longer echo the typed answer. The visible echo belongs to
+  `CliRunner` (which replaces the prompt reader); a real terminal echoes the
+  answer itself, and piped input shows nothing. This applies to `prompt`,
+  `confirm`, option prompts, `confirmation_option` and `password_option`.
+- Hidden input is read through the public `termui.hidden_prompt_func` (getpass),
+  so the typed characters are never displayed.
+- `multiple` options read environment variables split by the parameter type
+  (`Path`/`File` on `os.pathsep`, strings on whitespace).
+- `multiple=True` combined with `nargs>1` produces a tuple of tuples.
+- Completion completes only the argument at the cursor position (variadic
+  arguments always), with correct ordering and no state leaking between contexts.
+- `DateTime` reports "format" (singular) when it has a single format.
+- A `ParamType` subclass without a `name` falls back to its class name in
+  `to_info_dict`.
+- `Context.with_resource` hands the command's exception to the resource's
+  `__exit__`; a clean run passes `None`.
+- Undecodable bytes in path errors render with the Unicode replacement character.
+- `Group` subclass method hooks are called in the same order and number as the
+  reference (unknown-subcommand suggestions no longer call `list_commands`).
+
 Behavior corrections from an external evaluation against the contract ("Fix
 round 1"). Each was confirmed against the reference and is covered as a whole
 class of inputs in `tests/differential/test_fix_round1.py`.

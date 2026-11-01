@@ -15,6 +15,7 @@ import typing as t
 import uuid as _uuid
 
 from .exceptions import BadParameter
+from .utils import format_filename
 
 if t.TYPE_CHECKING:
     from .core import Context, Parameter
@@ -43,7 +44,11 @@ class ParamType:
         return cls
 
     def to_info_dict(self) -> dict[str, t.Any]:
-        return {"param_type": _info_param_type(type(self)), "name": self.name}
+        param_type = _info_param_type(type(self))
+        name = getattr(self, "name", None)
+        if name is None:
+            name = type(self).__name__
+        return {"param_type": param_type, "name": name}
 
     def __call__(
         self,
@@ -457,6 +462,10 @@ class DateTime(ParamType):
             if converted is not None:
                 return converted
         formats_str = ", ".join(repr(f) for f in self.formats)
+        if len(self.formats) == 1:
+            self.fail(
+                f"{value!r} does not match the format {formats_str}.", param, ctx
+            )
         self.fail(
             f"{value!r} does not match the formats {formats_str}.", param, ctx
         )
@@ -587,6 +596,8 @@ def _safe_close(f: t.IO[t.Any]) -> t.Callable[[], None]:
 
 
 class Path(ParamType):
+    envvar_list_splitter = os.path.pathsep
+
     def __init__(
         self,
         exists: bool = False,
@@ -664,36 +675,36 @@ class Path(ParamType):
                 if not self.exists:
                     return self.coerce_path_result(rv)
                 self.fail(
-                    f"{self.name.title()} {os.fspath(rv)!r} does not exist.",
+                    f"{self.name.title()} {format_filename(rv)!r} does not exist.",
                     param,
                     ctx,
                 )
 
             if not self.file_okay and stat.S_ISREG(st.st_mode):
                 self.fail(
-                    f"{self.name.title()} {os.fspath(rv)!r} is a file.", param, ctx
+                    f"{self.name.title()} {format_filename(rv)!r} is a file.", param, ctx
                 )
             if not self.dir_okay and stat.S_ISDIR(st.st_mode):
                 self.fail(
-                    f"{self.name.title()} {os.fspath(rv)!r} is a directory.",
+                    f"{self.name.title()} {format_filename(rv)!r} is a directory.",
                     param,
                     ctx,
                 )
             if self.readable and not os.access(rv, os.R_OK):
                 self.fail(
-                    f"{self.name.title()} {os.fspath(rv)!r} is not readable.",
+                    f"{self.name.title()} {format_filename(rv)!r} is not readable.",
                     param,
                     ctx,
                 )
             if self.writable and not os.access(rv, os.W_OK):
                 self.fail(
-                    f"{self.name.title()} {os.fspath(rv)!r} is not writable.",
+                    f"{self.name.title()} {format_filename(rv)!r} is not writable.",
                     param,
                     ctx,
                 )
             if self.executable and not os.access(rv, os.X_OK):
                 self.fail(
-                    f"{self.name.title()} {os.fspath(rv)!r} is not executable.",
+                    f"{self.name.title()} {format_filename(rv)!r} is not executable.",
                     param,
                     ctx,
                 )

@@ -71,6 +71,8 @@ a routine step risks touching forbidden material.)
 | **full suite (final)** | 2026-10-31 | **321 passed, 0 skipped** | after review fixes; `CLIRELAY_REQUIRE_ORACLE=1 pytest -rs -p no:warnings` on Python 3.15.2 |
 | Fix round 1 (external eval) | 2026-11-01 | 15 findings fixed | an external evaluation against Click 8.5.0 reported 15 divergences (each as observable input/output only). Every one was confirmed against the oracle by black-box probing, fixed by deriving the general rule, and locked as a whole class in `tests/differential/test_fix_round1.py`. Details below. |
 | **full suite (after round 1)** | 2026-11-01 | **432 passed, 0 skipped** | `CLIRELAY_REQUIRE_ORACLE=1 pytest -rs -p no:warnings` on Python 3.15.2 (111 new cases) |
+| Fix round 2 (external eval) | 2026-11-01 | 11 findings fixed | a second external evaluation drove both libraries through real processes and pseudo-terminals (not only `CliRunner`) and reported 11 divergences. Every one was confirmed against the oracle three ways and fixed. Details below. |
+| **full suite (after round 2)** | 2026-11-01 | **493 passed, 0 skipped** | `CLIRELAY_REQUIRE_ORACLE=1 pytest -rs -p no:warnings` on Python 3.15.2 (61 new cases, prompt cases run three ways) |
 
 ## Fix round 1 — findings from the external evaluation (2026-11-01)
 
@@ -126,13 +128,71 @@ I derived the package-name rule for #11 by creating small on-disk modules with
 different `__name__`/`__package__` and observing the oracle's error text as a
 black box — not by reading Click. Noted here per the independence rules.
 
+## Fix round 2 — findings from the second external evaluation (2026-11-01)
+
+The second evaluation drove both libraries through **real subprocesses and
+pseudo-terminals**, not only `CliRunner`. All findings were confirmed against the
+oracle in each run mode as a black box (small programs, outputs compared), never
+by reading Click. Regressions are in `tests/differential/test_fix_round2.py`,
+where every prompt/interaction case runs three ways (CliRunner, piped
+subprocess, pty).
+
+The central lesson, now a standing rule: **the visible echo of typed input
+belongs to `CliRunner`, not to the library.** `CliRunner` replaces the prompt
+reader so the answer reappears in captured output; a real terminal echoes it
+itself; piped input shows nothing. Fix round 1 had the library echo the answer,
+which only looked right under `CliRunner`.
+
+1. **Prompts don't echo input.** `prompt`, `confirm`, option prompts,
+   `confirmation_option` and `password_option` no longer echo the typed answer.
+   The library writes the prompt (visible → `echo`; hidden → via the reader) and
+   reads a bare line through module-level `visible_prompt_func` (default `input`)
+   or `hidden_prompt_func` (default `getpass.getpass`). `CliRunner.isolation`
+   replaces both readers to echo the answer onto the same stream the prompt went
+   to (stdout, or stderr when `err=True`).
+2. **Hidden input stays hidden.** Hidden prompts call the public
+   `clirelay.termui.hidden_prompt_func` (getpass): the terminal echo is disabled,
+   so a pty shows only the prompt and a newline; on a non-tty subprocess getpass
+   falls back and writes the prompt to stderr. (Both libraries share the same
+   stdlib getpass, so the fallback warning is byte-identical.)
+3. **`multiple` env-var splitting** is delegated to the type:
+   `Path`/`File.split_envvar_value` splits on `os.pathsep`, a plain string splits
+   on whitespace. `Path` had been missing the `os.pathsep` splitter.
+4. **`multiple=True` with `nargs>1`** yields a tuple of per-occurrence tuples
+   (`(('a','1'),('b','2'))`); `type_cast_value` now casts the inner values.
+5. **Completion resolves the argument at the cursor only.** The parser records
+   the number of positional tokens seen; completion walks the arguments, charging
+   each the values it consumed, and completes the first still-expecting one (a
+   variadic argument always). Resilient parsing no longer raises on a partially
+   filled `nargs>1` argument.
+6. **`DateTime`** says "format" (singular) with one format, "formats" otherwise.
+7. **`Context.with_resource`**: resources now receive the exception propagating
+   out of the command (the context's `__exit__` forwards it to the exit stack); a
+   clean run passes `None`, because the normal `Exit` is raised after the context
+   closes.
+8. **A name-less `ParamType`** gives `{'param_type': 'NoName', 'name': 'NoName'}`
+   from `to_info_dict`, using the class name.
+9. **Undecodable path bytes** render as the replacement character: path errors
+   use `format_filename`, which round-trips through `os.fsencode` so a stray
+   `\xff` shows as `�` rather than a `\udcff` surrogate escape.
+10. **`Group` subclass hooks** match the oracle's call sequence and count: the
+    did-you-mean search reads the registered commands directly instead of the
+    (possibly overridden) `list_commands`, so an unknown subcommand no longer
+    makes an extra `list_commands` call.
+11. **Completion ordering, cross-context state, and `FloatRange` open bounds**
+    were each probed against the oracle. Completion ordering is covered by the
+    cursor-position fix (5); `FloatRange` with open/half-open bounds (value,
+    clamp error, metavar, out-of-range message) already matched and is now
+    locked; no cross-context state leak was found.
+
 ## Unverified / exempt behaviors
 
-- **PTY breadth:** `getchar`, `pause`, `edit`, `echo_via_pager` and now
-  `progressbar` are verified through a pseudo-terminal; `progressbar`'s ETA/speed
-  numbers are timing-dependent (exempt) and normalized away only in that test.
-  `clear` is verified only structurally. Indeterminate (lengthless) progress bars
-  pulse on a timer and are not asserted byte-for-byte.
+- **PTY breadth:** `getchar`, `pause`, `edit`, `echo_via_pager`, `progressbar`
+  and now every prompt/confirm/password/confirmation case are verified through a
+  pseudo-terminal (and also as a piped subprocess and under `CliRunner`).
+  `progressbar`'s ETA/speed numbers are timing-dependent (exempt) and normalized
+  away only in that test. `clear` is verified only structurally. Indeterminate
+  (lengthless) progress bars pulse on a timer and are not asserted byte-for-byte.
 - **`launch`** opens real applications and is exempt from testing; implemented as
   documented (uses `open` on macOS, `webbrowser` elsewhere).
 - **Windows-only behavior** cannot be verified on this machine; implemented to

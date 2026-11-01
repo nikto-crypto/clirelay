@@ -19,7 +19,13 @@ Test files (`tests/differential/` unless noted):
 `test_library.py` (TL), `test_prompts.py` (TP), `test_completion.py` (TK),
 `test_info_dict.py` (TI), `test_misuse.py` (TM), `../test_api_surface.py` (TA),
 `../test_oracle_hygiene.py` (TH), `test_terminal.py` (TT), `test_review.py` (TR),
-`test_fix_round1.py` (TF).
+`test_fix_round1.py` (TF), `test_fix_round2.py` (TF2).
+
+TF2 runs every prompt/confirm/password/confirmation case **three ways** —
+`CliRunner`, a piped subprocess, and a pseudo-terminal — and all three must match
+the oracle. (In a terminal the terminal echoes the typed answer; in a subprocess
+nothing does; under `CliRunner` the replaced reader does. The library never
+echoes it.)
 
 | Feature | C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8 | C9 | C10 |
 |---------|----|----|----|----|----|----|----|----|----|-----|
@@ -61,9 +67,24 @@ Test files (`tests/differential/` unless noted):
 | progressbar rendering (PTY) | — | — | — | — | TF | TF | — | — | — | — |
 | version_option auto-detect | TF | — | — | — | — | — | — | — | — | TF |
 | format_filename / get_app_dir | — | — | — | — | TL | — | — | — | TA | — |
-| prompts / confirm / hidden | — | — | — | — | — | TP | — | — | TA | — |
-| confirmation prompt / retries | — | — | — | — | — | TP,TF | — | — | — | — |
-| prompt re-ask (empty/invalid/callback) | — | — | — | — | — | TF | — | — | — | — |
+| prompts / confirm / hidden | — | — | — | — | — | TP,TF2 | — | — | TA | — |
+| prompt input NOT echoed (3-way) | TF2 | — | — | TF2 | — | TF2 | — | — | — | — |
+| hidden input (getpass, 3-way) | TF2 | — | — | TF2 | — | TF2 | — | — | — | — |
+| password / confirmation option (3-way) | TF2 | — | — | — | — | TF2 | — | — | — | — |
+| prompt err-stream routing (3-way) | — | — | — | TF2 | — | TF2 | — | — | — | — |
+| confirmation prompt / retries | — | — | — | — | — | TP,TF,TF2 | — | — | — | — |
+| prompt re-ask (empty/invalid/callback) | — | — | — | — | — | TF,TF2 | — | — | — | — |
+| multiple + nargs (tuple of tuples) | TF2 | TF2 | — | — | — | — | — | — | — | — |
+| envvar list split (Path/File/str) | TF2 | TF2 | — | — | — | — | — | — | — | — |
+| DateTime singular/plural message | — | — | — | TF2 | — | — | — | — | — | — |
+| name-less ParamType to_info_dict | — | TF2 | — | — | — | — | — | — | — | — |
+| Context.with_resource exceptions | TF2 | TF2 | — | — | — | — | — | — | — | — |
+| undecodable path bytes (�) | — | — | — | TF2 | TF2 | — | — | — | — | — |
+| FloatRange open bounds / clamp | TF2 | — | TF2 | TF2 | — | — | — | — | — | — |
+| completion at cursor position | — | — | — | — | — | — | TF2 | — | — | — |
+| completion nargs/variadic ordering | — | — | — | — | — | — | TF2 | — | — | — |
+| completion no state leak | — | — | — | — | — | — | TF2 | — | — | — |
+| Group subclass hook order | — | TF2 | — | — | — | — | TF2 | — | — | — |
 | completion scripts (4 shells) | — | — | — | — | — | — | TK | — | TA | — |
 | completion responses | — | — | — | — | — | — | TK,TF | — | — | — |
 | completion: used opts / nargs / Path | — | — | — | — | — | — | TF | — | — | — |
@@ -84,6 +105,11 @@ Notes:
 - Realistic apps combining several of these features (a database CLI, a web
   launcher, a task queue) run in `TF`, alongside the package-manager/web-server/
   git-like/pipeline apps in `TC`.
+- Every prompt/confirm/password/confirmation case in `TF2` is checked in all
+  three run modes (CliRunner, piped subprocess, pseudo-terminal). The hidden
+  path uses the public `clirelay.termui.hidden_prompt_func` (getpass); the
+  getpass fallback warning on a non-tty subprocess is identical to the oracle's
+  because both import the same standard-library `getpass`.
 - `launch` is exempt from testing (opens real applications); it is implemented
   as documented.
 - Windows-only behavior is unverified on this machine (see `PROVENANCE.md`).
