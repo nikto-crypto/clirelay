@@ -343,7 +343,11 @@ def _make_subinvoke_context(
     ctx = Context(cmd, info_name=cmd.name, parent=parent)
     for param in cmd.get_params(ctx):
         if param.name not in kwargs and param.expose_value:
-            kwargs[param.name] = param.get_default(ctx) if param.name not in kwargs else kwargs[param.name]
+            # Missing parameters are filled from their defaults, with type
+            # conversion (so '15' with type=int becomes 15 and a missing
+            # ``multiple`` option becomes ()).  Explicitly passed values are left
+            # exactly as given, unconverted.
+            kwargs[param.name] = param.type_cast_value(ctx, param.get_default(ctx))
     ctx.params = kwargs
     return ctx
 
@@ -556,7 +560,11 @@ class Parameter:
                     raise
                 value = None
         if self.expose_value:
-            ctx.params[self.name] = value
+            # When several options share a destination, an un-activated flag
+            # resolves to None from its default and must not clobber a value
+            # another option already contributed.
+            if value is not None or self.name not in ctx.params:
+                ctx.params[self.name] = value
         return value, args
 
     def get_help_record(self, ctx: Context) -> tuple[str, str] | None:
@@ -655,7 +663,16 @@ class Option(Parameter):
                     else _types.convert_type(None, self.flag_value)
                 )
             if self._default_is_unset and not self.required:
-                self.default = False
+                # A bool flag defaults to False; a flag with a custom value
+                # defaults to None, so that an un-activated flag sharing a
+                # destination with another contributes nothing.
+                self.default = False if isinstance(self.flag_value, bool) else None
+
+        # A flag value with ``is_flag=False`` makes the option take an optional
+        # value: a bare switch yields ``flag_value``, otherwise the given value.
+        self._flag_needs_value = (
+            self._flag_value_was_set and not self.is_flag and not self.count
+        ) or (self.prompt is not None and not self.prompt_required)
 
         self.show_default = show_default
         self.show_choices = show_choices
@@ -736,14 +753,13 @@ class Option(Parameter):
             parser.add_option(self, self.opts, self.name, action="store_const", const=self.flag_value)
         else:
             action = "append" if self.multiple else "store"
-            optional_value = self.prompt is not None and not self.prompt_required
             parser.add_option(
                 self,
                 self.opts,
                 self.name,
                 action=action,
                 nargs=self.nargs,
-                optional_value=optional_value,
+                optional_value=self._flag_needs_value,
             )
 
     def resolve_envvar_value(self, ctx: Context) -> str | None:
@@ -770,8 +786,12 @@ class Option(Parameter):
         source = ParameterSource.COMMANDLINE
 
         if value is FLAG_NEEDS_VALUE:
-            value = self.prompt_for_value(ctx)
-            return value, ParameterSource.PROMPT
+            # A bare optional-value switch: prompt if one is configured,
+            # otherwise fall back to the option's flag value.
+            if self.prompt is not None and not ctx.resilient_parsing:
+                value = self.prompt_for_value(ctx)
+                return value, ParameterSource.PROMPT
+            return self.flag_value, ParameterSource.COMMANDLINE
 
         if value is None:
             value = self.value_from_envvar(ctx)
@@ -804,6 +824,10 @@ class Option(Parameter):
             show_choices=self.show_choices,
             confirmation_prompt=self.confirmation_prompt,
             show_default=self.show_default if self.show_default is not None else True,
+            # Process the entry fully (type conversion *and* this option's
+            # callback) inside the prompt loop, so a callback that rejects the
+            # value prints its message and re-prompts instead of aborting.
+            value_proc=lambda v: self.process_value(ctx, v),
         )
 
     @property
@@ -920,6 +944,9 @@ class Option(Parameter):
             return ""
         if isinstance(default_value, (list, tuple)):
             return ", ".join(str(d) for d in default_value)
+        if default_value == "":
+            # An empty-string default is still shown, quoted, so it is visible.
+            return '""'
         return str(default_value)
 
 
@@ -961,9 +988,14 @@ class Argument(Parameter):
             return self.metavar
         metavar = self.type.get_metavar(self, ctx)
         if metavar is None:
+            # No type-supplied metavar: use the name and add the optional
+            # brackets ourselves.  When the type does supply one (Choice,
+            # DateTime, ...), it already carries its own decoration, so we must
+            # not wrap it again (a non-required Choice is ``[a|b]``, not
+            # ``[[a|b]]``).
             metavar = self.name.upper() if self.name else ""
-        if not self.required:
-            metavar = f"[{metavar}]"
+            if not self.required:
+                metavar = f"[{metavar}]"
         if self.nargs != 1:
             metavar += "..."
         if self.deprecated:
@@ -1082,11 +1114,13 @@ class Command:
         return params
 
     def get_help_option_names(self, ctx: Context) -> list[str]:
-        all_names = set(ctx.help_option_names)
+        used: set[str] = set()
         for param in self.params:
-            all_names.difference_update(param.opts)
-            all_names.difference_update(param.secondary_opts)
-        return list(all_names)
+            used.update(param.opts)
+            used.update(param.secondary_opts)
+        # Preserve the configured order of the help option names, dropping any
+        # already claimed by another parameter.
+        return [name for name in ctx.help_option_names if name not in used]
 
     def get_help_option(self, ctx: Context) -> Option | None:
         help_options = self.get_help_option_names(ctx)
@@ -1318,6 +1352,14 @@ class Command:
             for param in self.get_params(ctx):
                 if not isinstance(param, Option) or param.hidden:
                     continue
+                # Don't re-suggest an option that was already given, unless it
+                # may legitimately appear more than once (``multiple``).
+                if (
+                    not param.multiple
+                    and ctx.get_parameter_source(param.name)
+                    is ParameterSource.COMMANDLINE
+                ):
+                    continue
                 results.extend(
                     CompletionItem(name, help=param.help)
                     for name in [*param.opts, *param.secondary_opts]
@@ -1521,7 +1563,10 @@ class Group(Command):
                 with ctx:
                     super().invoke(ctx)
                     return _process_result([])
-            raise NoArgsIsHelpError(ctx)
+            # No subcommand and not invoked standalone: this is a usage error.
+            # (The full-help-on-no-args behavior is handled in parse_args via
+            # no_args_is_help; reaching here means a command was required.)
+            raise UsageError(_("Missing command."), ctx)
 
         args = [*ctx._protected_args, *ctx.args]
         ctx.args = []

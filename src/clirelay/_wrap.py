@@ -29,9 +29,18 @@ def _wrapper(
         expand_tabs=False,
         replace_whitespace=replace_whitespace,
         break_long_words=True,
-        break_on_hyphens=False,
+        break_on_hyphens=True,
         drop_whitespace=True,
     )
+
+
+def wrap_dl_text(text: str, width: int) -> str:
+    """Wrap a definition-list cell.
+
+    Unlike :func:`wrap_text`, embedded newlines collapse to spaces, so a help
+    string laid out over several source lines reflows into one paragraph.
+    """
+    return _wrapper(width, "", "", replace_whitespace=True).fill(text.expandtabs())
 
 
 def wrap_text(

@@ -74,7 +74,6 @@ Private modules (my names, unlike the oracle's):
 - `_term.py` — terminal-only machinery: `getchar`, pager, editor, the progress
   bar renderer.
 - `_wrap.py` — the wrapping engine used by `wrap_text` / `HelpFormatter`.
-- `_wincon.py` — a thin Windows-console shim (best-effort, unverified here).
 - `_completion_scripts.py` — the four shell source templates, reproduced byte
   for byte from the oracle's `source()` output. **This is the single module
   allowed to match the oracle verbatim** (see `BUILD_PROMPT.md`); it is listed

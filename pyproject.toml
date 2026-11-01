@@ -24,7 +24,7 @@ dependencies = []
 
 [project.urls]
 Documentation = "https://clirelay.readthedocs.io/"
-Source = "https://github.com/nserapiglia/clirelay"
+Source = "https://github.com/nikto-crypto/clirelay"
 
 [dependency-groups]
 dev = [

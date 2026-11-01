@@ -139,7 +139,7 @@ class StringParamType(ParamType):
                 return value.decode(_FS_ENCODING)
             except UnicodeError:
                 return value.decode("utf-8", "replace")
-        return value
+        return str(value)
 
     def __repr__(self) -> str:
         return "STRING"
@@ -523,6 +523,14 @@ class File(ParamType):
         info.update(super().to_info_dict())
         return info
 
+    def shell_complete(
+        self, ctx: Context, param: Parameter, incomplete: str
+    ) -> list[CompletionItem]:
+        """Complete file paths for this value."""
+        from .shell_completion import CompletionItem
+
+        return [CompletionItem(incomplete, type="file")]
+
     def resolve_lazy_flag(self, value: t.Any) -> bool:
         if self.lazy is not None:
             return bool(self.lazy)
@@ -619,6 +627,15 @@ class Path(ParamType):
         }
         info.update(super().to_info_dict())
         return info
+
+    def shell_complete(
+        self, ctx: Context, param: Parameter, incomplete: str
+    ) -> list[CompletionItem]:
+        """Complete file or directory paths, depending on what is allowed."""
+        from .shell_completion import CompletionItem
+
+        kind = "dir" if self.dir_okay and not self.file_okay else "file"
+        return [CompletionItem(incomplete, type=kind)]
 
     def coerce_path_result(
         self, value: str | os.PathLike[str]

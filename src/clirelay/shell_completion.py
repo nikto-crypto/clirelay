@@ -248,17 +248,25 @@ def _resolve_incomplete(
         for param in ctx.command.get_params(ctx):
             if isinstance(param, Option) and name in param.opts:
                 return param, incomplete
-    # If the previous token is an option that still needs a value, complete it.
-    if args:
-        last = args[-1]
+    # If a trailing option still expects one or more values, complete the next
+    # one.  Scanning back to the most recent option token and counting the values
+    # already supplied handles multi-value options (nargs > 1), not just the
+    # first value.
+    for i in range(len(args) - 1, -1, -1):
+        tok = args[i]
+        if not tok or tok[:1] not in ctx._opt_prefixes:
+            continue
+        values_after = len(args) - 1 - i
         for param in ctx.command.get_params(ctx):
             if (
                 isinstance(param, Option)
                 and not param.is_flag
                 and not param.count
-                and last in [*param.opts, *param.secondary_opts]
+                and tok in [*param.opts, *param.secondary_opts]
+                and values_after < param.nargs
             ):
                 return param, incomplete
+        break
     return ctx.command, incomplete
 
 

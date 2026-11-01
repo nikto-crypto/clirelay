@@ -139,8 +139,7 @@ def _prompt_once(
             except UsageError as e:
                 report(e.message, value)
                 continue
-        else:
-            return default
+        # Empty input with no default: ask again (end of input raises Abort).
 
 
 def _flush_if_interactive(err: bool) -> None:

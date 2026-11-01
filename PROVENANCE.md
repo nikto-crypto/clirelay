@@ -69,12 +69,70 @@ a routine step risks touching forbidden material.)
 | **full suite** | 2026-10-31 | **286 passed, 8 skipped** | `CLIRELAY_REQUIRE_ORACLE=1 pytest -p no:warnings` on Python 3.15 |
 | fresh review (step 7) | 2026-10-31 | 12 fixes + 1 exempt | an independence-bound subagent (no access to this conversation, oracle black-box only) probed for gaps and found 13 differences; all fixed except #11 which the contract exempts. See `REVIEW_FINDINGS.md`; regressions locked in `tests/differential/test_review.py`. |
 | **full suite (final)** | 2026-10-31 | **321 passed, 0 skipped** | after review fixes; `CLIRELAY_REQUIRE_ORACLE=1 pytest -rs -p no:warnings` on Python 3.15.2 |
+| Fix round 1 (external eval) | 2026-11-01 | 15 findings fixed | an external evaluation against Click 8.5.0 reported 15 divergences (each as observable input/output only). Every one was confirmed against the oracle by black-box probing, fixed by deriving the general rule, and locked as a whole class in `tests/differential/test_fix_round1.py`. Details below. |
+| **full suite (after round 1)** | 2026-11-01 | **432 passed, 0 skipped** | `CLIRELAY_REQUIRE_ORACLE=1 pytest -rs -p no:warnings` on Python 3.15.2 (111 new cases) |
+
+## Fix round 1 — findings from the external evaluation (2026-11-01)
+
+All confirmed against the oracle by black-box probing (small programs run against
+both libraries, outputs compared), never by reading Click. The general rule was
+derived for each, not the single example. Regressions are in
+`tests/differential/test_fix_round1.py`.
+
+1. **`ctx.invoke`/`ctx.forward`** fill missing parameters from their defaults
+   *with* type conversion (so `'15'`→`15`, a missing `multiple`→`()`), while
+   explicitly passed values pass through unconverted.
+2. **Prompts re-ask** on empty input with no default, on a type-conversion
+   failure, and on a callback that raises `BadParameter` — the callback now runs
+   inside the prompt loop (so it runs twice overall, matching the oracle).
+3. **Feature switches:** a custom `flag_value` option with an unset/falsy default
+   resolves to `None` and does not clobber a shared destination; a truthy default
+   resolves to the flag value.
+4. **Optional-value options** (`is_flag=False` with a `flag_value`): a bare switch
+   yields the flag value, `--opt x` yields `x`, absence yields the default.
+5. **Groups:** reaching the invoke step with no subcommand and not
+   `invoke_without_command` is the usage error `Missing command.`; the full help
+   only comes from `no_args_is_help` on an empty argv.
+6. **Default type inference** falls back to `str` for an odd default (a set,
+   dict, complex, …), so the value is stringified.
+7. **Help text:** an optional Choice argument shows as `[a|b]` (not `[[a|b]]`);
+   `default=""` shows `[default: ""]`; `\b` in option help drops the marker and
+   reflows to one line; wrapping breaks after hyphens; a `\b` block keeps its
+   relative indentation.
+8. **Width** follows `COLUMNS` (via `shutil.get_terminal_size`) in a real
+   process, capped at `max_content_width`. (Under `CliRunner` the forced width of
+   80 still applies.)
+9. **`progressbar`** renders a real terminal frame (cursor hide/show, bar fill,
+   percent/pos/item, identical-frame de-dup, erase-to-widest). Only the ETA/speed
+   figures are exempt; the renderer is not.
+10. **`echo`** writes the UTF-8 bytes to the underlying buffer when the stream's
+    encoding cannot represent the text (e.g. an ASCII stdout), instead of raising.
+11. **`version_option`** guesses the distribution name from the module applying
+    the decorator, at decoration time (its `__name__`, or `__package__` when run
+    as `__main__`); a plain script yields no guess.
+12. **Completion:** already-used non-`multiple` options are not re-suggested;
+    `File`/`Path` yield `file`/`dir` items; every value of a multi-value option
+    completes; custom `Group` subclasses complete through `get_command` /
+    `list_commands`.
+13. **`to_info_dict`** matches for commands, groups (incl. nested and chained)
+    and contexts, apart from the exempt default-help parameter name.
+14. **Ordering:** eager callbacks run in declaration order; `get_help_option_names`
+    preserves the configured order.
+15. **Repo accuracy:** the `pyproject.toml` Source URL now points at the real
+    repository, and `SPEC.md` no longer lists a Windows-console module that was
+    never created.
+
+I derived the package-name rule for #11 by creating small on-disk modules with
+different `__name__`/`__package__` and observing the oracle's error text as a
+black box — not by reading Click. Noted here per the independence rules.
 
 ## Unverified / exempt behaviors
 
-- **PTY breadth:** `getchar`, `pause`, `edit`, `echo_via_pager` are verified for
-  the scriptable/pty paths above; `progressbar` rendering is timing-dependent
-  (exempt) and `clear` is verified only structurally.
+- **PTY breadth:** `getchar`, `pause`, `edit`, `echo_via_pager` and now
+  `progressbar` are verified through a pseudo-terminal; `progressbar`'s ETA/speed
+  numbers are timing-dependent (exempt) and normalized away only in that test.
+  `clear` is verified only structurally. Indeterminate (lengthless) progress bars
+  pulse on a timer and are not asserted byte-for-byte.
 - **`launch`** opens real applications and is exempt from testing; implemented as
   documented (uses `open` on macOS, `webbrowser` elsewhere).
 - **Windows-only behavior** cannot be verified on this machine; implemented to

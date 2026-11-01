@@ -8,6 +8,7 @@ from __future__ import annotations
 import contextlib
 import os
 import sys
+import time
 import typing as t
 
 from .utils import echo
@@ -272,6 +273,15 @@ class ProgressBar:
             self.is_hidden = True
         self._label_shown = False
 
+        # Rendering state: the last line drawn (for de-duplicating identical
+        # frames) and the widest line so far (for erasing a now-shorter line).
+        self._last_line: str | None = None
+        self.max_width = 0
+        # Timing state (used only for the exempt ETA/speed figures).
+        self.start = self.last_eta = time.time()
+        self._last_tick = self.start
+        self.avg: list[float] = []
+
     def __enter__(self) -> ProgressBar:
         self.entered = True
         self.render_progress()
@@ -297,6 +307,9 @@ class ProgressBar:
             return
         for item in self.iter:
             self.current_item = item
+            # Draw once the item is known (so item_show_func takes effect) and
+            # again after advancing; identical frames collapse via de-dup.
+            self.render_progress()
             yield item
             self.update(1)
         self.finish()
@@ -305,22 +318,146 @@ class ProgressBar:
     def update(self, n_steps: int, current_item: t.Any = None) -> None:
         if current_item is not None:
             self.current_item = current_item
+        now = time.time()
+        if n_steps > 0:
+            self.avg = (self.avg + [(now - self._last_tick) / n_steps])[-7:]
+        self._last_tick = now
         self.pos += n_steps
         self.render_progress()
 
     def finish(self) -> None:
         self.finished = True
+        self.current_item = None
+
+    # -- figures ------------------------------------------------------------
+
+    @property
+    def pct(self) -> float:
+        if self.finished:
+            return 1.0
+        if not self.length:
+            return 0.0
+        return min(self.pos / self.length, 1.0)
+
+    @property
+    def time_per_iteration(self) -> float:
+        if not self.avg:
+            return 0.0
+        return sum(self.avg) / len(self.avg)
+
+    @property
+    def eta(self) -> float:
+        if self.length is not None and not self.finished:
+            return self.time_per_iteration * (self.length - self.pos)
+        return 0.0
+
+    @property
+    def eta_known(self) -> bool:
+        # The ETA appears only once the task has been running long enough to
+        # estimate it; its value is timing-dependent and exempt from parity.
+        return (
+            self.show_eta
+            and self.length is not None
+            and not self.finished
+            and bool(self.avg)
+            and (time.time() - self.start) >= 1.0
+        )
+
+    def format_eta(self) -> str:
+        if not self.eta_known:
+            return ""
+        seconds = int(self.eta)
+        s = seconds % 60
+        seconds //= 60
+        m = seconds % 60
+        seconds //= 60
+        h = seconds % 24
+        days = seconds // 24
+        if days:
+            return f"{days}d {h:02}:{m:02}:{s:02}"
+        return f"{h:02}:{m:02}:{s:02}"
+
+    def format_pos(self) -> str:
+        pos = str(self.pos)
+        if self.length is not None:
+            pos += f"/{self.length}"
+        return pos
+
+    def format_pct(self) -> str:
+        return f"{int(self.pct * 100):3d}%"
+
+    def format_bar(self) -> str:
+        if self.length is not None:
+            filled = int(self.pct * self.width)
+            bar = self.fill_char * filled
+            bar += self.empty_char * (self.width - filled)
+        elif self.finished:
+            bar = self.fill_char * self.width
+        else:
+            # Indeterminate: a block that moves with position (its motion is
+            # timing/position-dependent and exempt from exact parity).
+            bar = list(self.empty_char * self.width)
+            idx = int(self.pos) % (self.width or 1)
+            bar[idx] = self.fill_char
+            bar = "".join(bar)
+        return bar
+
+    def format_progress_line(self) -> str:
+        info_bits: list[str] = []
+        show_pct = (
+            self.show_percent
+            if self.show_percent is not None
+            else self.length is not None
+        )
+        if self.show_pos:
+            info_bits.append(self.format_pos())
+        if show_pct:
+            info_bits.append(self.format_pct())
+        eta = self.format_eta()
+        if eta:
+            info_bits.append(eta)
+        if self.item_show_func is not None and not self.finished:
+            item_info = self.item_show_func(self.current_item)
+            if item_info is not None:
+                info_bits.append(item_info)
+
+        return self.bar_template % {
+            "label": self.label,
+            "bar": self.format_bar(),
+            "info": self.info_sep.join(info_bits),
+        }
+
+    # -- drawing ------------------------------------------------------------
 
     def render_progress(self) -> None:
+        from ._wrap import term_len
+
         if self.is_hidden:
             # On a non-terminal, only the label line is emitted (once); the live
-            # bar (timing-dependent) is not drawn.
+            # bar is not drawn.
             if not self._label_shown:
                 echo(self.label, file=self.file, color=self.color)
                 self._label_shown = True
             return
-        # Live terminal rendering is timing-dependent and verified via a PTY.
-        return None
+
+        line = self.format_progress_line()
+        line_len = term_len(line)
+        if line_len < self.max_width:
+            # Pad to erase whatever the previous, longer frame left behind.
+            line = line + " " * (self.max_width - line_len)
+        else:
+            self.max_width = line_len
+
+        if line == self._last_line:
+            return  # identical frame: nothing to redraw
+        self._last_line = line
+
+        self.file.write(f"\r\x1b[?25l{line}")
+        self.file.flush()
 
     def render_finish(self) -> None:
-        return None
+        if self.is_hidden:
+            return
+        # Show the cursor again and end the line.
+        self.file.write("\x1b[?25h\n")
+        self.file.flush()

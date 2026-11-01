@@ -27,23 +27,30 @@ A new session continues from here under the same rules. Keep this file current.
 - [x] Repo artifacts: README, LICENSE, CHANGES, pyproject, uv.lock (no click),
   docs (Sphinx+MyST, builds with -W), 10 examples, .github/, devcontainer,
   editorconfig, pre-commit, readthedocs, tox.ini, coverage matrix, unit tests.
-- [x] Current: **286 passed, 8 skipped** on Python 3.15.
+- [x] Fresh-review subagent (step 7): 12 fixes + 1 exempt, locked in
+  `tests/differential/test_review.py`.
+- [x] Fix round 1 (external evaluation): 15 findings confirmed against the oracle
+  and fixed; whole-class regressions in `tests/differential/test_fix_round1.py`.
+  Includes real `progressbar` terminal rendering (no more stub), `COLUMNS`-driven
+  width in a real process, non-UTF-8 `echo`, decoration-time `version_option`
+  package detection, and completion for Path/nargs/used-options/custom groups.
+- [x] Current: **432 passed, 0 skipped** on Python 3.15.2.
 
 ## Remaining / polish
 
-1. Fresh-review subagent (step 7): run an independence-bound agent to probe for
-   coverage gaps; fold in any new cases it finds. (In progress / see
-   `tests/differential/` for additions.)
-2. Broaden PTY coverage (progressbar rendering is timing-exempt; `pause`,
-   `clear`).
-3. Optional: `mypy`/`ruff` clean-up pass; add more realistic CLIs to the fuzz
+1. Optional: `mypy`/`ruff` clean-up pass; add more realistic CLIs to the fuzz
    corpus.
+2. Indeterminate (lengthless) progress bars pulse on a timer and are not asserted
+   byte-for-byte (timing-dependent); verify structurally if needed.
+3. Windows-only behavior remains unverified on macOS (see `PROVENANCE.md`).
 4. Keep PROVENANCE.md pass-rate table current after any change.
 
 ## Notes for probing (rules discovered empirically — never from recall)
 
-- Terminal width ignores `COLUMNS` under a runner (os.get_terminal_size on the
-  fd, fallback 80); widths are exercised via the `terminal_width` context arg.
+- Terminal width: under `CliRunner` the forced width of 80 applies; in a real
+  process the width follows `COLUMNS` via `shutil.get_terminal_size`, capped at
+  `max_content_width` (default 80). Widths are also exercised via the
+  `terminal_width` context arg.
 - Deprecation notices are echoed to stderr as output (not Python warnings).
 - Prompts echo the typed input; errors show `e.message` (bare); hidden invalid
   input is masked `'***'`; stdout is line-buffered / stderr write-through so the

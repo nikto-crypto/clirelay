@@ -69,7 +69,18 @@ def echo(
     if text and should_strip_ansi(file, color):
         text = strip_ansi(text)
 
-    file.write(text)
+    try:
+        file.write(text)
+    except UnicodeEncodeError:
+        # The stream's encoding cannot represent the text (e.g. an ASCII stdout).
+        # Fall back to writing the UTF-8 bytes to the underlying binary buffer,
+        # matching the oracle, which never raises here.
+        binary_writer = _find_binary_writer(file)
+        if binary_writer is None:
+            raise
+        file.flush()
+        binary_writer.write(text.encode("utf-8", "replace"))
+        binary_writer.flush()
 
 
 def _posixify(name: str) -> str:

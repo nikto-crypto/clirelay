@@ -1,29 +1,29 @@
 """Help-text rendering: the :class:`HelpFormatter` and its building blocks."""
 from __future__ import annotations
 
-import os
-import sys
 import typing as t
 from contextlib import contextmanager
 
-from ._wrap import term_len, wrap_text
+from ._wrap import term_len, wrap_dl_text, wrap_text
 
 #: When set, overrides the detected terminal width everywhere.
 FORCED_WIDTH: int | None = None
 
 
 def _detect_columns() -> int:
-    """Terminal width from the real stdout/stderr, ignoring ``COLUMNS``.
+    """Terminal width for help rendering.
 
-    Falls back to 80 when there is no terminal (the usual case under a runner or
-    when output is piped), which matches the oracle.
+    Uses :func:`shutil.get_terminal_size`, which honors the ``COLUMNS``
+    environment variable first and otherwise queries the real terminal, falling
+    back to 80 when neither is available (piped output, no terminal).  This
+    matches the oracle, where ``COLUMNS`` drives the width in a real process.
     """
-    for stream in (sys.__stdout__, sys.__stderr__, sys.stdout, sys.stderr):
-        try:
-            return os.get_terminal_size(stream.fileno()).columns
-        except Exception:
-            continue
-    return 80
+    import shutil
+
+    try:
+        return shutil.get_terminal_size().columns
+    except Exception:
+        return 80
 
 
 def measure_table(rows: t.Iterable[tuple[str, ...]]) -> tuple[int, ...]:
@@ -156,7 +156,7 @@ class HelpFormatter:
                 self.write(" " * (first_col + self.current_indent))
 
             text_width = max(self.width - first_col - 2, 10)
-            wrapped = wrap_text(second, text_width, preserve_paragraphs=False)
+            wrapped = wrap_dl_text(second, text_width)
             lines = wrapped.splitlines()
             if lines:
                 self.write(f"{lines[0]}\n")

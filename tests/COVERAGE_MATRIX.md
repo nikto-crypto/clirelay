@@ -18,41 +18,55 @@ Test files (`tests/differential/` unless noted):
 `test_commands.py` (TC), `test_generated.py` (TG, 22k+ cases),
 `test_library.py` (TL), `test_prompts.py` (TP), `test_completion.py` (TK),
 `test_info_dict.py` (TI), `test_misuse.py` (TM), `../test_api_surface.py` (TA),
-`../test_oracle_hygiene.py` (TH).
+`../test_oracle_hygiene.py` (TH), `test_terminal.py` (TT), `test_review.py` (TR),
+`test_fix_round1.py` (TF).
 
 | Feature | C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8 | C9 | C10 |
 |---------|----|----|----|----|----|----|----|----|----|-----|
 | str/int/float options | TC,TG | TG,TI | TC,TG | TG | TL | — | — | — | TA | — |
 | flags (`is_flag`) | TC,TG | TG,TI | TC,TG | — | — | — | TK | — | TA | — |
 | `--x/--no-x` pairs | TC,TG | TG,TI | TG | — | — | — | — | — | TA | — |
-| shared-destination flags | TG | TG | — | — | — | — | — | — | — | — |
+| shared-destination flags | TG,TF | TG,TF | — | — | — | — | — | — | — | — |
+| feature switches (default side) | TF | TF | — | — | — | — | TF | — | — | — |
+| optional-value options (flag_value) | TF | TF | — | TF | — | TF | — | — | — | — |
 | count options | TC,TG | TG,TI | TC,TG | — | — | — | — | — | TA | — |
 | multiple options | TC,TG | TG,TI | TG | — | — | — | — | — | TA | — |
 | nargs (fixed/variadic) | TC,TG | TG | TG | TG | — | — | — | — | TA | TM |
-| defaults / show_default | TG | TG,TI | TC,TG | — | — | — | — | — | — | — |
+| defaults / show_default | TG | TG,TI | TC,TG,TF | — | — | — | — | — | — | — |
+| default type inference (odd defaults) | TF | TF | — | — | — | — | — | — | — | — |
 | required | TC,TG | TG | TG | TG | — | — | — | — | — | — |
 | envvar / auto_envvar | TG | TG | — | — | — | — | — | — | — | — |
 | hidden / deprecated options | TC | TI | TC | TC | — | — | TK | TC | — | TM |
 | Choice (case/Enum) | TC,TG | TG,TI | TG | TG,TP | TL | TP | TK | — | TA | — |
 | IntRange/FloatRange (clamp) | TC,TG | TI | TG | TG | TL | — | — | — | TA | TM |
 | Tuple | TG | TI | — | — | TL | — | — | — | TA | — |
-| File / Path | — | TI | — | — | TL | — | — | — | TA | — |
+| File / Path | — | TI | — | — | TL | — | TF | — | TA | — |
 | DateTime / UUID / BOOL | TG | TI | — | TG | TL | — | — | — | TA | — |
 | custom ParamType | — | — | — | — | TL (unit) | — | TK | — | TA | — |
 | arguments (nargs/required/help) | TC,TG | TG,TI | TC,TG | TG | — | — | TK | TC | TA | TM |
 | groups (nested) | TC,TG | TC | TC,TG | TC | — | — | TK | — | TA | — |
 | chain / invoke_without_command | TC | TI | TC | TC | — | — | — | — | — | — |
-| no_args_is_help | TC | — | TC | TC | — | — | — | — | — | — |
+| no_args_is_help / Missing command | TC,TF | — | TC,TF | TC,TF | — | — | — | — | — | — |
 | result_callback | TC (imagepipe) | — | — | — | — | — | — | — | — | — |
-| custom Group / aliases | TC | — | — | TC | — | — | — | — | — | — |
+| custom Group / aliases | TC | — | — | TC | — | — | TF | — | — | — |
 | Context / passing objects | TC | TI | — | — | — | — | — | — | TA | TM |
+| ctx.invoke / forward delegation | TF | TF | — | — | — | — | — | — | — | — |
+| eager callback order | — | TF | — | — | — | — | — | — | — | — |
+| help_option_names order | — | — | — | — | TF | — | — | — | TA | — |
 | echo / secho / style / unstyle | — | — | — | — | TL | — | — | — | TA | TM |
-| wrap_text / HelpFormatter | — | — | TC,TG | — | TL | — | — | — | TA | — |
+| wrap_text / HelpFormatter | — | — | TC,TG,TF | — | TL | — | — | — | TA | — |
+| help: \b, hyphen wrap, metavars | — | — | TF | TF | — | — | — | — | — | — |
+| real-subprocess COLUMNS width | — | — | TF | — | — | — | — | — | — | — |
+| non-UTF-8 stdout (echo) | TF | — | — | — | TF | — | — | — | — | — |
+| progressbar rendering (PTY) | — | — | — | — | TF | TF | — | — | — | — |
+| version_option auto-detect | TF | — | — | — | — | — | — | — | — | TF |
 | format_filename / get_app_dir | — | — | — | — | TL | — | — | — | TA | — |
 | prompts / confirm / hidden | — | — | — | — | — | TP | — | — | TA | — |
-| confirmation prompt / retries | — | — | — | — | — | TP | — | — | — | — |
+| confirmation prompt / retries | — | — | — | — | — | TP,TF | — | — | — | — |
+| prompt re-ask (empty/invalid/callback) | — | — | — | — | — | TF | — | — | — | — |
 | completion scripts (4 shells) | — | — | — | — | — | — | TK | — | TA | — |
-| completion responses | — | — | — | — | — | — | TK | — | — | — |
+| completion responses | — | — | — | — | — | — | TK,TF | — | — | — |
+| completion: used opts / nargs / Path | — | — | — | — | — | — | TF | — | — | — |
 | split_arg_string | — | — | — | — | TK | — | TK | — | TA | — |
 | deprecated attributes | — | — | — | — | — | — | — | TA | TA | — |
 | warnings (deprecation/user) | TC | — | — | — | — | — | — | TC,TM | — | TM |
@@ -62,10 +76,14 @@ Test files (`tests/differential/` unless noted):
 
 Notes:
 
-- Terminal-only behaviors (`getchar`, `pause`, `clear`, `progressbar`,
-  `echo_via_pager`, `edit`, hidden-prompt PTY paths) are exercised through the
-  `_term` implementation and the examples; full PTY comparison is listed as
-  partially verified in `PROVENANCE.md`.
+- Terminal-only behaviors are compared through a pseudo-terminal: `edit`
+  (via `EDITOR`), `echo_via_pager` (via `PAGER`) and `getchar` in `TT`, and the
+  `progressbar` renderer in `TF` (its ETA/speed figures are the only part
+  normalized away, since the contract exempts timing). `pause`/`clear` are
+  verified structurally.
+- Realistic apps combining several of these features (a database CLI, a web
+  launcher, a task queue) run in `TF`, alongside the package-manager/web-server/
+  git-like/pipeline apps in `TC`.
 - `launch` is exempt from testing (opens real applications); it is implemented
   as documented.
 - Windows-only behavior is unverified on this machine (see `PROVENANCE.md`).

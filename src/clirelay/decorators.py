@@ -212,12 +212,17 @@ def version_option(
     if message is None:
         message = _("%(prog)s, version %(version)s")
 
+    # Guess the distribution name from the module applying the decorator, at
+    # decoration time (the caller's frame), not from the callback later.  A
+    # top-level script (``__name__ == '__main__'`` with no package) yields no
+    # guess, so the version cannot be determined automatically.
+    if version is None and package_name is None:
+        package_name = _guess_package_name()
+
     def resolve(ctx: Context) -> str:
         resolved_prog = prog_name or ctx.find_root().info_name
         if version is None:
             name = package_name
-            if name is None:
-                name = _guess_package_name(ctx)
             if name is None:
                 raise RuntimeError(
                     f"Could not determine the version for {name} automatically."
@@ -277,18 +282,23 @@ def help_option(*param_decls: str, **kwargs: t.Any) -> t.Callable[[FC], FC]:
     return option(*param_decls, **kwargs)
 
 
-def _guess_package_name(ctx: Context) -> str | None:
-    """Best-effort distribution name from the command's callback module.
+def _guess_package_name() -> str | None:
+    """Best-effort distribution name from the module applying the decorator.
 
-    Mirrors the oracle: a command defined in a script (``__main__``, no package)
-    yields ``None`` rather than a wrong guess.
+    Reads the caller's module globals: its ``__name__`` names the distribution,
+    except for a top-level script (``__name__ == '__main__'``), where the
+    package (empty for a plain script) is used instead.  A plain script yields
+    ``None`` rather than a wrong guess, matching the oracle.
     """
     import sys
 
-    callback = ctx.find_root().command.callback
-    module_name = getattr(callback, "__module__", None)
-    module = sys.modules.get(module_name) if module_name else None
-    package = getattr(module, "__package__", None)
-    if not package:
+    try:
+        f_globals = sys._getframe(2).f_globals
+    except (AttributeError, ValueError):
         return None
-    return package.partition(".")[0]
+    name = f_globals.get("__name__")
+    if name == "__main__":
+        name = f_globals.get("__package__")
+    if not name:
+        return None
+    return name.partition(".")[0]
